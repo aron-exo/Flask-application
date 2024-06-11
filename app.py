@@ -60,7 +60,4 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
         except Exception as e:
             st.error(f"Error: {e}")
 
-# Display secrets for debugging purposes (remove in production)
-st.write("DB username:", st.secrets["db_user"])
-st.write("DB password:", st.secrets["db_password"])
-st.write("My cool secrets:", st.secrets["my_cool_secrets"]["things_i_like"])
+
