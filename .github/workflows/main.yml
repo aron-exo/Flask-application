@@ -1,43 +1,28 @@
-name: Deploy to Render
-
-on:
-  push:
-    branches:
-      - main
+name: Show Me the S3cr3tz
+on: [push]
 
 jobs:
-  build:
-
+  debug:
+    name: Debug
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'
-
-    - name: Install dependencies
-      run: |
-        python -m venv venv
-        . venv/bin/activate
-        pip install -r requirements.txt
-
-    - name: Run tests
-      run: |
-        . venv/bin/activate
-        # Add your test command here, if you have tests
-        # For example, if you have a tests directory with unittest:
-        # python -m unittest discover -s tests
-
-    - name: Deploy to Render
+    - name: Set up secret file
       env:
-        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
+        SUPABASE_DB_NAME: ${{ secrets.SUPABASE_DB_NAME }}
+        SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+        SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
       run: |
-        curl -X POST \
-          -H "Authorization: Bearer $RENDER_API_KEY" \
-          -H "Content-Type: application/json" \
-          -d '{"serviceId": "YOUR_SERVICE_ID"}' \
-          https://api.render.com/v1/services/YOUR_SERVICE_ID/deploys
+        echo $SUPABASE_DB_HOST >> secrets.txt
+        echo $SUPABASE_DB_NAME >> secrets.txt
+        echo $SUPABASE_DB_USER >> secrets.txt
+        echo $SUPABASE_DB_PASSWORD >> secrets.txt
+        echo $SUPABASE_DB_PORT >> secrets.txt
+
+    - name: Run tmate
+      uses: mxschmitt/action-tmate@v2
