@@ -54,7 +54,7 @@ draw.add_to(m)
 st_data = st_folium(m, width=700, height=500)
 
 # Handle the drawn polygon
-if st_data['last_active_drawing']:
+if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
     st.write('Polygon GeoJSON:', polygon_geojson)
     
