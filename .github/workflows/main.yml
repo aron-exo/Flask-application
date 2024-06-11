@@ -10,7 +10,7 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Set up secret file
+    - name: Verify secrets
       env:
         SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
         SUPABASE_DB_NAME: ${{ secrets.SUPABASE_DB_NAME }}
@@ -18,11 +18,8 @@ jobs:
         SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
       run: |
-        echo $SUPABASE_DB_HOST >> secrets.txt
-        echo $SUPABASE_DB_NAME >> secrets.txt
-        echo $SUPABASE_DB_USER >> secrets.txt
-        echo $SUPABASE_DB_PASSWORD >> secrets.txt
-        echo $SUPABASE_DB_PORT >> secrets.txt
-
-    - name: Run tmate
-      uses: mxschmitt/action-tmate@v2
+        echo "SUPABASE_DB_HOST: $SUPABASE_DB_HOST"
+        echo "SUPABASE_DB_NAME: $SUPABASE_DB_NAME"
+        echo "SUPABASE_DB_USER: $SUPABASE_DB_USER"
+        echo "SUPABASE_DB_PASSWORD: $SUPABASE_DB_PASSWORD"
+        echo "SUPABASE_DB_PORT: $SUPABASE_DB_PORT"
