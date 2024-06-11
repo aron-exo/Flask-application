@@ -2,23 +2,18 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 import json
-import os
-from dotenv import load_dotenv
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 
-# Load environment variables
-load_dotenv()
-
 # Database connection function
 def get_connection():
     return psycopg2.connect(
-        host=os.getenv('SUPABASE_DB_HOST'),
-        database=os.getenv('SUPABASE_DB_NAME'),
-        user=os.getenv('SUPABASE_DB_USER'),
-        password=os.getenv('SUPABASE_DB_PASSWORD'),
-        port=os.getenv('SUPABASE_DB_PORT')
+        host=st.secrets["db_host"],
+        database=st.secrets["db_name"],
+        user=st.secrets["db_user"],
+        password=st.secrets["db_password"],
+        port=st.secrets["db_port"]
     )
 
 # Query data from the database
@@ -64,3 +59,8 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             st.write(df)
         except Exception as e:
             st.error(f"Error: {e}")
+
+# Display secrets for debugging purposes (remove in production)
+st.write("DB username:", st.secrets["db_user"])
+st.write("DB password:", st.secrets["db_password"])
+st.write("My cool secrets:", st.secrets["my_cool_secrets"]["things_i_like"])
