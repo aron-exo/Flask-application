@@ -83,5 +83,3 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             st.write(df)
         except Exception as e:
             st.error(f"Error: {e}")
-
-
