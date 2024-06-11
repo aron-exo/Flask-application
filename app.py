@@ -16,19 +16,43 @@ def get_connection():
         port=st.secrets["db_port"]
     )
 
-# Query data from the database
-def query_data(polygon_geojson):
-    conn = get_connection()
+# Fetch all tables and their geometry columns
+def fetch_tables_with_geometry(conn):
+    query = """
+    SELECT f_table_schema, f_table_name, f_geometry_column
+    FROM geometry_columns;
+    """
+    tables = pd.read_sql(query, conn)
+    return tables
+
+# Query data from the database for a specific table
+def query_table_data(conn, table_name, geom_column, polygon_geojson):
     query = f"""
-    SELECT * FROM your_table
+    SELECT * FROM {table_name}
     WHERE ST_Intersects(
         ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326),
-        your_table.geometry_column
+        {geom_column}
     );
     """
     df = pd.read_sql(query, conn)
-    conn.close()
     return df
+
+# Query data from all tables
+def query_all_tables(polygon_geojson):
+    conn = get_connection()
+    tables = fetch_tables_with_geometry(conn)
+    all_data = []
+
+    for index, row in tables.iterrows():
+        table_name = f"{row['f_table_schema']}.{row['f_table_name']}"
+        geom_column = row['f_geometry_column']
+        df = query_table_data(conn, table_name, geom_column, polygon_geojson)
+        if not df.empty:
+            df['table_name'] = table_name
+            all_data.append(df)
+    
+    conn.close()
+    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
 st.title('Streamlit Map Application')
 
@@ -55,9 +79,12 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
     
     if st.button('Query Database'):
         try:
-            df = query_data(polygon_geojson)
+            df = query_all_tables(polygon_geojson)
             st.write(df)
         except Exception as e:
             st.error(f"Error: {e}")
 
-
+# Display secrets for debugging purposes (remove in production)
+st.write("DB username:", st.secrets["db_user"])
+st.write("DB password:", st.secrets["db_password"])
+st.write("My cool secrets:", st.secrets["my_cool_secrets"]["things_i_like"])
