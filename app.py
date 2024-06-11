@@ -1,6 +1,10 @@
 import streamlit as st
 import pandas as pd
 import psycopg2
+import json
+import folium
+from streamlit_folium import st_folium
+from folium.plugins import Draw
 
 # Database connection function
 def get_connection():
@@ -17,38 +21,84 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Fetch all table names
-def fetch_table_names(conn):
-    query = """
-    SELECT table_schema, table_name
-    FROM information_schema.tables
-    WHERE table_schema NOT IN ('information_schema', 'pg_catalog');
-    """
-    tables = pd.read_sql(query, conn)
-    return tables
-
-# Fetch all tables and their geometry columns
+# Fetch all tables and their geometry columns from the public schema
 def fetch_tables_with_geometry(conn):
     query = """
     SELECT f_table_schema, f_table_name, f_geometry_column
-    FROM geometry_columns;
+    FROM geometry_columns
+    WHERE f_table_schema = 'public';
     """
     tables = pd.read_sql(query, conn)
     return tables
 
-st.title('Streamlit Map Application')
+# Query data from the database for a specific table
+def query_table_data(conn, table_name, geom_column, polygon_geojson):
+    try:
+        query = f"""
+        SELECT * FROM public.{table_name}
+        WHERE ST_Intersects(
+            ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326),
+            {geom_column}
+        );
+        """
+        st.write(f"Running query on table {table_name}:")
+        st.write(query)
+        df = pd.read_sql(query, conn)
+        st.write(f"Result for table {table_name}: {len(df)} rows")
+        return df
+    except Exception as e:
+        st.error(f"Query error in table {table_name}: {e}")
+        return pd.DataFrame()
 
-# Establish database connection
-conn = get_connection()
-if conn:
-    # Fetch and display all table names
-    tables = fetch_table_names(conn)
-    st.write("Tables in the database:")
+# Query data from all tables
+def query_all_tables(polygon_geojson):
+    conn = get_connection()
+    if conn is None:
+        return pd.DataFrame()
+    
+    tables = fetch_tables_with_geometry(conn)
+    st.write("Tables with geometry columns:")
     st.write(tables)
 
-    # Fetch and display tables with geometry columns
-    geom_tables = fetch_tables_with_geometry(conn)
-    st.write("Tables with geometry columns:")
-    st.write(geom_tables)
-else:
-    st.error("Failed to connect to the database.")
+    all_data = []
+    for index, row in tables.iterrows():
+        table_name = row['f_table_name']
+        geom_column = row['f_geometry_column']
+        df = query_table_data(conn, table_name, geom_column, polygon_geojson)
+        if not df.empty:
+            df['table_name'] = table_name
+            all_data.append(df)
+    
+    conn.close()
+    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
+
+st.title('Streamlit Map Application')
+
+# Create a Folium map
+m = folium.Map(location=[51.505, -0.09], zoom_start=13)
+
+# Add drawing options to the map
+draw = Draw(
+    export=True,
+    filename='data.geojson',
+    position='topleft',
+    draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
+    edit_options={'edit': False}
+)
+draw.add_to(m)
+
+# Display the map using Streamlit-Folium
+st_data = st_folium(m, width=700, height=500)
+
+# Handle the drawn polygon
+if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
+    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
+    st.write('Polygon GeoJSON:', polygon_geojson)
+    
+    if st.button('Query Database'):
+        try:
+            df = query_all_tables(polygon_geojson)
+            st.write("Query result:")
+            st.write(df)
+        except Exception as e:
+            st.error(f"Error: {e}")
