@@ -8,13 +8,18 @@ from folium.plugins import Draw
 
 # Database connection function
 def get_connection():
-    return psycopg2.connect(
-        host=st.secrets["db_host"],
-        database=st.secrets["db_name"],
-        user=st.secrets["db_user"],
-        password=st.secrets["db_password"],
-        port=st.secrets["db_port"]
-    )
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["db_host"],
+            database=st.secrets["db_name"],
+            user=st.secrets["db_user"],
+            password=st.secrets["db_password"],
+            port=st.secrets["db_port"]
+        )
+        return conn
+    except Exception as e:
+        st.error(f"Connection error: {e}")
+        return None
 
 # Fetch all tables and their geometry columns
 def fetch_tables_with_geometry(conn):
@@ -27,22 +32,29 @@ def fetch_tables_with_geometry(conn):
 
 # Query data from the database for a specific table
 def query_table_data(conn, table_name, geom_column, polygon_geojson):
-    query = f"""
-    SELECT * FROM {table_name}
-    WHERE ST_Intersects(
-        ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326),
-        {geom_column}
-    );
-    """
-    st.write(f"Running query on table {table_name}:")
-    st.write(query)
-    df = pd.read_sql(query, conn)
-    st.write(f"Result for table {table_name}: {len(df)} rows")
-    return df
+    try:
+        query = f"""
+        SELECT * FROM {table_name}
+        WHERE ST_Intersects(
+            ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326),
+            {geom_column}
+        );
+        """
+        st.write(f"Running query on table {table_name}:")
+        st.write(query)
+        df = pd.read_sql(query, conn)
+        st.write(f"Result for table {table_name}: {len(df)} rows")
+        return df
+    except Exception as e:
+        st.error(f"Query error in table {table_name}: {e}")
+        return pd.DataFrame()
 
 # Query data from all tables
 def query_all_tables(polygon_geojson):
     conn = get_connection()
+    if conn is None:
+        return pd.DataFrame()
+    
     tables = fetch_tables_with_geometry(conn)
     all_data = []
 
