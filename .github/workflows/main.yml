@@ -1,10 +1,7 @@
-name: Python application
+name: Deploy to Render
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
     branches:
       - main
 
@@ -31,16 +28,16 @@ jobs:
     - name: Run tests
       run: |
         . venv/bin/activate
-        # Add your test command here
-        python -m unittest discover -s tests
+        # Add your test command here, if you have tests
+        # For example, if you have a tests directory with unittest:
+        # python -m unittest discover -s tests
 
-    - name: Run Flask app
-      run: |
-        . venv/bin/activate
-        python app.py
+    - name: Deploy to Render
       env:
-        SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
-        SUPABASE_DB_NAME: ${{ secrets.SUPABASE_DB_NAME }}
-        SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
-        SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      run: |
+        curl -X POST \
+          -H "Authorization: Bearer $RENDER_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{"serviceId": "YOUR_SERVICE_ID"}' \
+          https://api.render.com/v1/services/YOUR_SERVICE_ID/deploys
