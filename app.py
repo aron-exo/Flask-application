@@ -35,7 +35,8 @@ def fetch_tables_with_geometry(conn):
 def query_table_data(conn, table_name, geom_column, polygon_geojson):
     try:
         query = f"""
-        SELECT * FROM public.{table_name}
+        SELECT ST_AsGeoJSON({geom_column}) as geometry
+        FROM public.{table_name}
         WHERE ST_Intersects(
             ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326),
             {geom_column}
@@ -72,6 +73,17 @@ def query_all_tables(polygon_geojson):
     conn.close()
     return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
+# Function to add geometries to map
+def add_geometries_to_map(geojson_list, map_object):
+    for geojson in geojson_list:
+        geometry = json.loads(geojson)
+        if geometry['type'] == 'Point':
+            folium.Marker(location=[geometry['coordinates'][1], geometry['coordinates'][0]]).add_to(map_object)
+        elif geometry['type'] == 'LineString':
+            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in geometry['coordinates']]).add_to(map_object)
+        elif geometry['type'] == 'Polygon':
+            folium.Polygon(locations=[(coord[1], coord[0]) for coord in geometry['coordinates'][0]]).add_to(map_object)
+
 st.title('Streamlit Map Application')
 
 # Create a Folium map
@@ -98,7 +110,11 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
     if st.button('Query Database'):
         try:
             df = query_all_tables(polygon_geojson)
-            st.write("Query result:")
-            st.write(df)
+            if not df.empty:
+                geojson_list = df['geometry'].tolist()
+                add_geometries_to_map(geojson_list, m)
+                st_data = st_folium(m, width=700, height=500)
+            else:
+                st.write("No geometries found within the drawn polygon.")
         except Exception as e:
             st.error(f"Error: {e}")
