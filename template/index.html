@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leaflet Draw Example</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+</head>
+<body>
+  <div id="map" style="height: 600px;"></div>
+  <script>
+    var map = L.map('map').setView([51.505, -0.09], 13);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    var drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    var drawControl = new L.Control.Draw({
+      edit: {
+        featureGroup: drawnItems
+      }
+    });
+    map.addControl(drawControl);
+
+    map.on('draw:created', function (event) {
+      var layer = event.layer;
+      drawnItems.addLayer(layer);
+      
+      // Convert the drawn polygon to GeoJSON and send it to the server
+      var polygonGeoJSON = layer.toGeoJSON();
+      fetch('/api/query_polygon', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(polygonGeoJSON)
+      })
+      .then(response => response.json())
+      .then(data => {
+        // Handle the response data (e.g., display it on the map)
+        console.log(data);
+        var resultLayer = L.geoJSON(data);
+        map.addLayer(resultLayer);
+      })
+      .catch(error => console.error('Error:', error));
+    });
+  </script>
+</body>
+</html>
