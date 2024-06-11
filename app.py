@@ -34,7 +34,10 @@ def query_table_data(conn, table_name, geom_column, polygon_geojson):
         {geom_column}
     );
     """
+    st.write(f"Running query on table {table_name}:")
+    st.write(query)
     df = pd.read_sql(query, conn)
+    st.write(f"Result for table {table_name}: {len(df)} rows")
     return df
 
 # Query data from all tables
@@ -42,6 +45,9 @@ def query_all_tables(polygon_geojson):
     conn = get_connection()
     tables = fetch_tables_with_geometry(conn)
     all_data = []
+
+    st.write("Tables with geometry columns:")
+    st.write(tables)
 
     for index, row in tables.iterrows():
         table_name = f"{row['f_table_schema']}.{row['f_table_name']}"
@@ -80,6 +86,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
     if st.button('Query Database'):
         try:
             df = query_all_tables(polygon_geojson)
+            st.write("Query result:")
             st.write(df)
         except Exception as e:
             st.error(f"Error: {e}")
