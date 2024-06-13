@@ -82,24 +82,30 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
 def query_geometries_within_polygon(polygon_geojson):
     tables = get_tables_with_shape_column()
     all_data = []
-    for table in tables:
+    
+    progress_bar = st.progress(0)
+    total_tables = len(tables)
+    
+    for idx, table in enumerate(tables):
         df = query_geometries_within_polygon_for_table(table, polygon_geojson)
         if not df.empty:
             df['table_name'] = table
             all_data.append(df)
+        progress_bar.progress((idx + 1) / total_tables)
+
     if all_data:
         return pd.concat(all_data, ignore_index=True)
     else:
         return pd.DataFrame()
 
 # Function to add geometries to map with coordinate transformation
-def add_geometries_to_map(geojson_list, metadata_list, map_object, table_styles):
+def add_geometries_to_map(geojson_list, metadata_list, map_object):
     for geojson, metadata in zip(geojson_list, metadata_list):
         if 'srid' not in metadata:
             continue
 
-        table_name = metadata.pop('table_name')
         srid = metadata.pop('srid')
+        table_name = metadata.pop('table_name')
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
@@ -111,52 +117,27 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object, table_styles)
         shapely_geom = shape(geometry)
         transformed_geom = transform(transformer.transform, shapely_geom)
 
-        # Remove the 'geometry' field from metadata for the popup
+        # Remove the 'geometry' and 'SHAPE' fields from metadata for the popup
         metadata.pop('geometry', None)
-        
-        # Create a popup with metadata (other columns)
-        metadata_html = "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
-        popup = folium.Popup(f"<b>{table_name}</b><br>{metadata_html}", max_width=300)
+        metadata.pop('SHAPE', None)
 
-        color = table_styles[table_name]['color']
-        icon = table_styles[table_name]['icon']
+        # Create a popup with metadata (other columns)
+        metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
+        popup = folium.Popup(metadata_html, max_width=300)
 
         if transformed_geom.geom_type == 'Point':
-            folium.Marker(
-                location=[transformed_geom.y, transformed_geom.x],
-                popup=popup,
-                icon=folium.Icon(color=color, icon=icon, prefix='fa')
-            ).add_to(map_object)
+            folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'LineString':
-            folium.PolyLine(
-                locations=[(coord[1], coord[0]) for coord in transformed_geom.coords],
-                popup=popup,
-                color=color
-            ).add_to(map_object)
+            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'Polygon':
-            folium.Polygon(
-                locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords],
-                popup=popup,
-                color=color
-            ).add_to(map_object)
+            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'MultiLineString':
             for line in transformed_geom.geoms:
-                folium.PolyLine(
-                    locations=[(coord[1], coord[0]) for coord in line.coords],
-                    popup=popup,
-                    color=color
-                ).add_to(map_object)
+                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup).add_to(map_object)
         else:
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
 st.title('Streamlit Map Application')
-
-# Define table styles with different colors and icons
-table_styles = {
-    'rwmainlineonli_exportfeature': {'color': 'blue', 'icon': 'info-circle'},
-    'another_table': {'color': 'red', 'icon': 'exclamation-triangle'},
-    # Add more tables with styles here
-}
 
 # Create a Folium map centered on Los Angeles if not already done
 def initialize_map():
@@ -186,11 +167,11 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
                 st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
+                st.session_state.metadata_list = df.to_dict(orient='records')
                 
                 # Clear the existing map and reinitialize it
                 m = initialize_map()
-                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m, table_styles)
+                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
                 st.session_state.map = m
             else:
                 st.write("No geometries found within the drawn polygon.")
