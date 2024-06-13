@@ -101,11 +101,6 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
             continue
 
         srid = metadata.pop('srid')
-
-        # Handle deprecated SRIDs
-        if srid == 102645:
-            srid = 2229
-
         geometry = json.loads(geojson)
 
         try:
