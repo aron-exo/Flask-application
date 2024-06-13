@@ -80,10 +80,15 @@ def query_geometries_within_polygon_from_table(polygon_geojson, table_name):
 def query_geometries_within_polygon(polygon_geojson):
     all_data = []
     tables = get_geometry_tables()
-    for table in tables:
+    progress_bar = st.progress(0)
+    total_tables = len(tables)
+    
+    for i, table in enumerate(tables):
         df = query_geometries_within_polygon_from_table(polygon_geojson, table)
         if not df.empty:
             all_data.append(df)
+        progress_bar.progress((i + 1) / total_tables)
+    
     return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
 # Function to add geometries to map with coordinate transformation
