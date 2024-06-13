@@ -111,7 +111,7 @@ draw = Draw(
 draw.add_to(m)
 
 # Display the map using Streamlit-Folium
-st_data = st_folium(m, width=700, height=500)
+st_data = st_folium(m, width=700, height=500, key="initial_map")
 
 # Handle the drawn polygon
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
@@ -126,7 +126,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
                 st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
                 
                 add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
-                st_data = st_folium(m, width=700, height=500)
+                st_data = st_folium(m, width=700, height=500, key="updated_map")
             else:
                 st.write("No geometries found within the drawn polygon.")
         except Exception as e:
@@ -137,4 +137,4 @@ if st.session_state.geojson_list:
     add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
 
 # Display the map using Streamlit-Folium
-st_folium(m, width=700, height=500)
+st_folium(m, width=700, height=500, key="final_map")
