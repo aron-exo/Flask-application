@@ -15,6 +15,7 @@ def get_connection():
             password=st.secrets["db_password"],
             port=st.secrets["db_port"]
         )
+        st.write("Connection to database established.")
         return conn
     except Exception as e:
         st.error(f"Connection error: {e}")
@@ -28,7 +29,25 @@ def fetch_tables_with_geometry(conn):
     WHERE f_table_schema = 'public';
     """
     tables = pd.read_sql(query, conn)
+    st.write("Tables with geometry columns:")
+    st.write(tables)
     return tables
+
+# Verify data in a table
+def verify_table_data(conn, table_name, geom_column):
+    query = f"""
+    SELECT COUNT(*), pg_typeof({geom_column}) as geom_type, ST_AsText({geom_column}) as geom_text
+    FROM public.{table_name}
+    WHERE {geom_column} IS NOT NULL
+    GROUP BY {geom_column}
+    LIMIT 5;
+    """
+    st.write(f"Verifying data in table {table_name}:")
+    st.write(query)
+    df = pd.read_sql(query, conn)
+    st.write(f"Sample data from table {table_name}:")
+    st.write(df)
+    return not df.empty
 
 # Query all geometries from a specific table
 def query_all_geometries(conn, table_name, geom_column):
@@ -53,13 +72,16 @@ def query_all_tables():
         return pd.DataFrame()
     
     tables = fetch_tables_with_geometry(conn)
-    st.write("Tables with geometry columns:")
-    st.write(tables)
 
     all_data = []
     for index, row in tables.iterrows():
         table_name = row['f_table_name']
         geom_column = row['f_geometry_column']
+        
+        # Verify the data in the table
+        if not verify_table_data(conn, table_name, geom_column):
+            continue
+        
         df = query_all_geometries(conn, table_name, geom_column)
         if not df.empty:
             df['table_name'] = table_name
