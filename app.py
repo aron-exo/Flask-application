@@ -121,8 +121,11 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         metadata.pop('geometry', None)
         metadata.pop('SHAPE', None)
 
+        # Filter metadata to only include columns from the current table
+        filtered_metadata = {key: value for key, value in metadata.items() if key not in ['geometry', 'SHAPE']}
+
         # Create a popup with metadata (other columns)
-        metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
+        metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in filtered_metadata.items()])
         popup = folium.Popup(metadata_html, max_width=300)
 
         if transformed_geom.geom_type == 'Point':
