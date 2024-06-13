@@ -98,16 +98,22 @@ def query_all_tables():
 # Function to add geometries to map
 def add_geometries_to_map(geojson_list, map_object):
     for geojson in geojson_list:
+        st.write(f"Adding geometry to map: {geojson}")
         if isinstance(geojson, str):
             geometry = json.loads(geojson)
         else:
             geometry = geojson  # Assuming it's already a dict
+        
+        st.write(f"Parsed geometry: {geometry}")
+
         if geometry['type'] == 'Point':
             folium.Marker(location=[geometry['coordinates'][1], geometry['coordinates'][0]]).add_to(map_object)
         elif geometry['type'] == 'LineString':
             folium.PolyLine(locations=[(coord[1], coord[0]) for coord in geometry['coordinates']]).add_to(map_object)
         elif geometry['type'] == 'Polygon':
             folium.Polygon(locations=[(coord[1], coord[0]) for coord in geometry['coordinates'][0]]).add_to(map_object)
+        else:
+            st.write(f"Unsupported geometry type: {geometry['type']}")
 
 st.title('Streamlit Map Application')
 
