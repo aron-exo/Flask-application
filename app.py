@@ -98,7 +98,10 @@ def query_all_tables():
 # Function to add geometries to map
 def add_geometries_to_map(geojson_list, map_object):
     for geojson in geojson_list:
-        geometry = json.loads(geojson)
+        if isinstance(geojson, str):
+            geometry = json.loads(geojson)
+        else:
+            geometry = geojson  # Assuming it's already a dict
         if geometry['type'] == 'Point':
             folium.Marker(location=[geometry['coordinates'][1], geometry['coordinates'][0]]).add_to(map_object)
         elif geometry['type'] == 'LineString':
