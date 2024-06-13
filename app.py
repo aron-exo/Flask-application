@@ -49,10 +49,10 @@ def verify_table_data(conn, table_name):
 def query_geometries_within_polygon(conn, table_name, polygon_geojson):
     try:
         query = f"""
-        SELECT ST_AsGeoJSON("SHAPE") as geometry
+        SELECT ST_AsGeoJSON(ST_GeomFromText(ST_AsText("SHAPE"))) as geometry
         FROM public.{table_name}
         WHERE ST_Intersects(
-            "SHAPE",
+            ST_GeomFromText(ST_AsText("SHAPE")),
             ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
         );
         """
