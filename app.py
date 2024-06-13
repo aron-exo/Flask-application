@@ -14,6 +14,8 @@ if 'geojson_list' not in st.session_state:
     st.session_state.geojson_list = []
 if 'metadata_list' not in st.session_state:
     st.session_state.metadata_list = []
+if 'map_initialized' not in st.session_state:
+    st.session_state.map_initialized = False
 
 # Database connection function
 def get_connection():
@@ -58,13 +60,11 @@ def query_geometries_within_polygon(polygon_geojson):
 # Function to add geometries to map with coordinate transformation
 def add_geometries_to_map(geojson_list, metadata_list, map_object):
     for geojson, metadata in zip(geojson_list, metadata_list):
-        st.write(f"Metadata: {metadata}")  # Debugging information
         if 'srid' not in metadata:
             st.error(f"SRID not found in metadata: {metadata}")
             continue
 
         srid = metadata.pop('srid')
-
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
@@ -97,23 +97,23 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 
 st.title('Streamlit Map Application')
 
-# Create a Folium map centered on Los Angeles
-m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
-
-# Add drawing options to the map
-draw = Draw(
-    export=True,
-    filename='data.geojson',
-    position='topleft',
-    draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
-    edit_options={'edit': False}
-)
-draw.add_to(m)
-
-# Display the map using Streamlit-Folium
-st_data = st_folium(m, width=700, height=500, key="initial_map")
+# Create a Folium map centered on Los Angeles if not already done
+if not st.session_state.map_initialized:
+    m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
+    draw = Draw(
+        export=True,
+        filename='data.geojson',
+        position='topleft',
+        draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
+        edit_options={'edit': False}
+    )
+    draw.add_to(m)
+    st.session_state.map = m
+    st.session_state.map_initialized = True
 
 # Handle the drawn polygon
+st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_map")
+
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
     st.write('Polygon GeoJSON:', polygon_geojson)
@@ -125,16 +125,15 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
                 st.session_state.geojson_list = df['geometry'].tolist()
                 st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
                 
+                # Clear the existing map and reinitialize it
+                m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
+                draw.add_to(m)
                 add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
-                st_data = st_folium(m, width=700, height=500, key="updated_map")
+                st.session_state.map = m
             else:
                 st.write("No geometries found within the drawn polygon.")
         except Exception as e:
             st.error(f"Error: {e}")
 
-# Add geometries from session state to the map
-if st.session_state.geojson_list:
-    add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
-
 # Display the map using Streamlit-Folium
-st_folium(m, width=700, height=500, key="final_map")
+st_folium(st.session_state.map, width=700, height=500, key="final_map")
