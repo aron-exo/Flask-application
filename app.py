@@ -45,6 +45,7 @@ def query_geometries_within_polygon(polygon_geojson):
         WHERE column_name = 'SHAPE' AND table_schema = 'public';
         """
         tables = pd.read_sql(table_query, conn)
+        st.write("Tables found:", tables)  # Debug statement
         
         all_data = []
         for table_name in tables['table_name']:
@@ -60,13 +61,16 @@ def query_geometries_within_polygon(polygon_geojson):
             );
             """
             df = pd.read_sql(query, conn)
-            df['table_name'] = table_name
+            st.write(f"Data from {table_name}:", df.head())  # Debug statement
             all_data.append(df)
         
         conn.close()
+        
         if all_data:
             combined_df = pd.concat(all_data, ignore_index=True)
+            st.write("Combined DataFrame before dropping duplicates:", combined_df)  # Debug statement
             combined_df = combined_df.drop_duplicates().reset_index(drop=True)  # Ensure no duplicates
+            st.write("Combined DataFrame after dropping duplicates:", combined_df)  # Debug statement
             return combined_df
         else:
             return pd.DataFrame()
