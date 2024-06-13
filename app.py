@@ -4,7 +4,7 @@ import psycopg2
 import json
 import folium
 import pyproj
-from shapely.geometry import shape, MultiLineString, Point, LineString, Polygon
+from shapely.geometry import shape, MultiLineString
 from shapely.ops import transform
 from streamlit_folium import st_folium
 
@@ -73,9 +73,7 @@ st.title('Streamlit Map Application')
 # Create a Folium map centered on Los Angeles
 m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
 
-# Display the map using Streamlit-Folium
-st_data = st_folium(m, width=700, height=500)
-
+# Handle the display of all geometries
 if st.button('Display All Geometries'):
     try:
         conn = get_connection()
@@ -85,9 +83,11 @@ if st.button('Display All Geometries'):
                 geojson_list = df['geometry'].tolist()
                 srid_list = df['srid'].tolist()
                 add_geometries_to_map(geojson_list, srid_list, m)
-                st_data = st_folium(m, width=700, height=500)
             else:
                 st.write("No geometries found in the table.")
             conn.close()
     except Exception as e:
         st.error(f"Error: {e}")
+
+# Display the map using Streamlit-Folium
+st_data = st_folium(m, width=700, height=500)
