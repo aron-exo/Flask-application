@@ -4,7 +4,7 @@ import psycopg2
 import json
 import folium
 import pyproj
-from shapely.geometry import shape
+from shapely.geometry import shape, MultiLineString
 from shapely.ops import transform
 from streamlit_folium import st_folium
 
