@@ -2,11 +2,17 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 import json
-import plotly.express as px
-import plotly.graph_objects as go
+import folium
+import pyproj
 from shapely.geometry import shape
 from shapely.ops import transform
-import pyproj
+from streamlit_folium import st_folium
+
+# Initialize session state for geometries if not already done
+if 'geojson_list' not in st.session_state:
+    st.session_state.geojson_list = []
+if 'metadata_list' not in st.session_state:
+    st.session_state.metadata_list = []
 
 # Database connection function
 def get_connection():
@@ -18,6 +24,7 @@ def get_connection():
             password=st.secrets["db_password"],
             port=st.secrets["db_port"]
         )
+        st.write("Connection to database established.")
         return conn
     except Exception as e:
         st.error(f"Connection error: {e}")
@@ -47,85 +54,49 @@ def query_geometries_within_polygon(polygon_geojson):
         st.error(f"Query error: {e}")
         return pd.DataFrame()
 
-# Function to plot geometries with Plotly
-def plot_geometries(geojson_list, metadata_list):
-    fig = go.Figure()
-
+# Function to add geometries to map with coordinate transformation
+def add_geometries_to_map(geojson_list, metadata_list, map_object):
     for geojson, metadata in zip(geojson_list, metadata_list):
         geometry = json.loads(geojson)
 
-        if geometry['type'] == 'MultiLineString':
-            for line in geometry['coordinates']:
-                lons, lats = zip(*line)
-                text = "<br>".join([f"{key}: {value}" for key, value in metadata.items()])
-                fig.add_trace(go.Scattermapbox(
-                    mode="lines",
-                    lon=lons,
-                    lat=lats,
-                    text=text,
-                    hoverinfo="text"
-                ))
+        # Define the source and destination coordinate systems
+        src_crs = pyproj.CRS(f"EPSG:{metadata.pop('srid')}")
+        dst_crs = pyproj.CRS("EPSG:4326")
+        transformer = pyproj.Transformer.from_crs(src_crs, dst_crs, always_xy=True)
 
-        elif geometry['type'] == 'LineString':
-            lons, lats = zip(*geometry['coordinates'])
-            text = "<br>".join([f"{key}: {value}" for key, value in metadata.items()])
-            fig.add_trace(go.Scattermapbox(
-                mode="lines",
-                lon=lons,
-                lat=lats,
-                text=text,
-                hoverinfo="text"
-            ))
+        # Transform the geometry to the geographic coordinate system
+        shapely_geom = shape(geometry)
+        transformed_geom = transform(transformer.transform, shapely_geom)
+        
+        popup_text = "<br>".join([f"{key}: {value}" for key, value in metadata.items() if key != 'SHAPE'])
+        
+        if transformed_geom.geom_type == 'Point':
+            folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup_text).add_to(map_object)
+        elif transformed_geom.geom_type == 'LineString':
+            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup_text).add_to(map_object)
+        elif transformed_geom.geom_type == 'Polygon':
+            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup_text).add_to(map_object)
+        elif transformed_geom.geom_type == 'MultiLineString':
+            for line in transformed_geom.geoms:
+                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup_text).add_to(map_object)
+        else:
+            st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
-        elif geometry['type'] == 'Point':
-            lon, lat = geometry['coordinates']
-            text = "<br>".join([f"{key}: {value}" for key, value in metadata.items()])
-            fig.add_trace(go.Scattermapbox(
-                mode="markers",
-                lon=[lon],
-                lat=[lat],
-                text=text,
-                hoverinfo="text"
-            ))
+st.title('Streamlit Folium Map Application')
 
-    fig.update_layout(
-        mapbox=dict(
-            style="open-street-map",
-            center=dict(lat=34.0522, lon=-118.2437),
-            zoom=10
-        ),
-        margin={"r":0,"t":0,"l":0,"b":0}
-    )
+# Create a Folium map centered on Los Angeles
+m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
 
-    return fig
-
-st.title('Streamlit Plotly Map Application')
-
-# Initialize session state for geometries if not already done
-if 'geojson_list' not in st.session_state:
-    st.session_state.geojson_list = []
-if 'metadata_list' not in st.session_state:
-    st.session_state.metadata_list = []
-
-# Create a Plotly map centered on Los Angeles
-fig = go.Figure()
+# Add geometries from session state to the map
 if st.session_state.geojson_list:
-    fig = plot_geometries(st.session_state.geojson_list, st.session_state.metadata_list)
-else:
-    fig.update_layout(
-        mapbox=dict(
-            style="open-street-map",
-            center=dict(lat=34.0522, lon=-118.2437),
-            zoom=10
-        ),
-        margin={"r":0,"t":0,"l":0,"b":0}
-    )
+    add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
 
-st.plotly_chart(fig, use_container_width=True)
+# Display the map using Streamlit-Folium
+st_data = st_folium(m, width=700, height=500)
 
 # Handle the drawn polygon
-if 'last_active_drawing' in st.session_state:
-    polygon_geojson = json.dumps(st.session_state['last_active_drawing']['geometry'])
+if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
+    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
     
     if st.button('Query Database'):
         try:
@@ -133,9 +104,8 @@ if 'last_active_drawing' in st.session_state:
             if not df.empty:
                 st.session_state.geojson_list = df['geometry'].tolist()
                 st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
-                st.session_state['last_active_drawing'] = None
-                fig = plot_geometries(st.session_state.geojson_list, st.session_state.metadata_list)
-                st.plotly_chart(fig, use_container_width=True)
+                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
+                st_data = st_folium(m, width=700, height=500)
             else:
                 st.write("No geometries found within the drawn polygon.")
         except Exception as e:
@@ -148,7 +118,7 @@ st.markdown(f"""
     <input type="hidden" id="last_active_drawing" value=''>
     <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
     <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
+    <link href="https://api.tiles.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
     <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" type="text/css">
     <script>
         mapboxgl.accessToken = '{st.secrets["mapbox_access_token"]}';
