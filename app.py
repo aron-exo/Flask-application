@@ -32,28 +32,57 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Query geometries within a polygon
+# Query all public tables with SHAPE column
+def get_public_tables_with_shape():
+    conn = get_connection()
+    if conn is None:
+        return []
+    try:
+        query = """
+        SELECT table_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' AND column_name = 'SHAPE';
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
+        return df['table_name'].tolist()
+    except Exception as e:
+        st.error(f"Query error: {e}")
+        return []
+
+# Query geometries within a polygon from all tables
 def query_geometries_within_polygon(polygon_geojson):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
-    try:
-        query = f"""
-        SELECT *, "SHAPE"::text as geometry, srid
-        FROM public.rwmainlineonli_exportfeature
-        WHERE ST_Intersects(
-            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
-            ST_SetSRID(
-                ST_GeomFromGeoJSON('{polygon_geojson}'),
-                4326
-            )
-        );
-        """
-        df = pd.read_sql(query, conn)
-        conn.close()
-        return df
-    except Exception as e:
-        st.error(f"Query error: {e}")
+    
+    tables = get_public_tables_with_shape()
+    all_data = []
+    
+    for table in tables:
+        try:
+            query = f"""
+            SELECT *, "SHAPE"::text as geometry, srid
+            FROM public.{table}
+            WHERE ST_Intersects(
+                ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
+                ST_SetSRID(
+                    ST_GeomFromGeoJSON('{polygon_geojson}'),
+                    4326
+                )
+            );
+            """
+            df = pd.read_sql(query, conn)
+            if not df.empty:
+                df['table_name'] = table  # Add table name to metadata
+                all_data.append(df)
+        except Exception as e:
+            st.error(f"Query error in table {table}: {e}")
+    
+    conn.close()
+    if all_data:
+        return pd.concat(all_data, ignore_index=True)
+    else:
         return pd.DataFrame()
 
 # Function to add geometries to map with coordinate transformation
