@@ -16,8 +16,6 @@ if 'metadata_list' not in st.session_state:
     st.session_state.metadata_list = []
 if 'map_initialized' not in st.session_state:
     st.session_state.map_initialized = False
-if 'map' not in st.session_state:
-    st.session_state.map = None
 
 # Database connection function
 def get_connection():
@@ -34,33 +32,15 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Function to get all public tables with a SHAPE column
-def get_geometry_tables():
-    conn = get_connection()
-    if conn is None:
-        return []
-    try:
-        query = """
-        SELECT table_name
-        FROM information_schema.columns
-        WHERE column_name = 'SHAPE' AND table_schema = 'public';
-        """
-        df = pd.read_sql(query, conn)
-        conn.close()
-        return df['table_name'].tolist()
-    except Exception as e:
-        st.error(f"Error fetching table names: {e}")
-        return []
-
-# Query geometries within a polygon from a specific table
-def query_geometries_within_polygon_from_table(polygon_geojson, table_name):
+# Query geometries within a polygon
+def query_geometries_within_polygon(polygon_geojson):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
     try:
         query = f"""
         SELECT *, "SHAPE"::text as geometry, srid
-        FROM public.{table_name}
+        FROM public.rwmainlineonli_exportfeature
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
             ST_SetSRID(
@@ -73,23 +53,8 @@ def query_geometries_within_polygon_from_table(polygon_geojson, table_name):
         conn.close()
         return df
     except Exception as e:
-        st.error(f"Query error in table {table_name}: {e}")
+        st.error(f"Query error: {e}")
         return pd.DataFrame()
-
-# Query geometries within a polygon from all tables
-def query_geometries_within_polygon(polygon_geojson):
-    all_data = []
-    tables = get_geometry_tables()
-    progress_bar = st.progress(0)
-    total_tables = len(tables)
-    
-    for i, table in enumerate(tables):
-        df = query_geometries_within_polygon_from_table(polygon_geojson, table)
-        if not df.empty:
-            all_data.append(df)
-        progress_bar.progress((i + 1) / total_tables)
-    
-    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
 # Function to add geometries to map with coordinate transformation
 def add_geometries_to_map(geojson_list, metadata_list, map_object):
@@ -143,13 +108,12 @@ def initialize_map():
     draw.add_to(m)
     return m
 
-# Initialize the map if not already done
 if not st.session_state.map_initialized:
     st.session_state.map = initialize_map()
     st.session_state.map_initialized = True
 
 # Handle the drawn polygon
-st_data = st_folium(st.session_state.map, width=700, height=500, key="map_initial")
+st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_map")
 
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
@@ -159,6 +123,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
                 st.session_state.geojson_list = df['geometry'].tolist()
+                df.reset_index(drop=True, inplace=True)  # Reset index to ensure unique values
                 st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
                 
                 # Clear the existing map and reinitialize it
@@ -170,5 +135,5 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
         except Exception as e:
             st.error(f"Error: {e}")
 
-# Display the updated map with geometries using Streamlit-Folium
-st_folium(st.session_state.map, width=700, height=500, key="map_final")
+# Display the map using Streamlit-Folium
+st_folium(st.session_state.map, width=700, height=500, key="map")
