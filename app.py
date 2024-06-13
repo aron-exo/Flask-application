@@ -4,9 +4,6 @@ import psycopg2
 import json
 import folium
 from streamlit_folium import st_folium
-from shapely.geometry import shape
-from shapely.ops import transform
-import pyproj
 
 # Database connection function
 def get_connection():
@@ -28,7 +25,7 @@ def get_connection():
 def query_all_geometries(conn):
     try:
         query = """
-        SELECT ST_AsGeoJSON(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::text), srid), 4326)) as geometry
+        SELECT "SHAPE"::text as geometry
         FROM public.rwmainlineonli_exportfeature
         WHERE "SHAPE" IS NOT NULL;
         """
