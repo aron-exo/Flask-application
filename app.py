@@ -20,81 +20,21 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Verify data in a table
-def verify_table_data(conn, table_name):
-    count_query = f"""
-    SELECT COUNT(*)
-    FROM public.{table_name}
-    WHERE "SHAPE" IS NOT NULL;
-    """
-    type_query = f"""
-    SELECT pg_typeof("SHAPE") as geom_type
-    FROM public.{table_name}
-    WHERE "SHAPE" IS NOT NULL
-    LIMIT 1;
-    """
-    st.write(f"Verifying data in table {table_name}:")
-    st.write(count_query)
-    count_df = pd.read_sql(count_query, conn)
-    st.write(type_query)
-    type_df = pd.read_sql(type_query, conn)
-    st.write(f"Sample data from table {table_name}:")
-    st.write(count_df)
-    st.write(type_df)
-    return not count_df.empty and not type_df.empty
-
-# Query geometries within a polygon from a specific table
-def query_geometries_within_polygon(conn, table_name, polygon_geojson):
+# Query geometries within the current map view bounding box
+def query_geometries_within_bbox(conn, min_lat, min_long, max_lat, max_long):
     try:
         query = f"""
-        SELECT ST_AsGeoJSON("SHAPE"::geometry) as geometry
-        FROM public.{table_name}
-        WHERE ST_Intersects(
-            "SHAPE"::geometry,
-            ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
-        );
+        SELECT geometry
+        FROM geometries_in_view({min_lat}, {min_long}, {max_lat}, {max_long});
         """
-        st.write(f"Running query on table {table_name}:")
+        st.write(f"Running query:")
         st.write(query)
         df = pd.read_sql(query, conn)
-        st.write(f"Result for table {table_name}: {len(df)} rows")
+        st.write(f"Result: {len(df)} rows")
         return df
     except Exception as e:
-        st.error(f"Query error in table {table_name}: {e}")
+        st.error(f"Query error: {e}")
         return pd.DataFrame()
-
-# Query geometries within a polygon from all tables
-def query_all_tables_within_polygon(polygon_geojson):
-    conn = get_connection()
-    if conn is None:
-        return pd.DataFrame()
-
-    # Assuming all public tables have the SHAPE column
-    query = """
-    SELECT table_name
-    FROM information_schema.columns
-    WHERE column_name = 'SHAPE' AND table_schema = 'public';
-    """
-    tables = pd.read_sql(query, conn)
-    st.write("Fetched tables with SHAPE column:")
-    st.write(tables)
-
-    all_data = []
-    for index, row in tables.iterrows():
-        table_name = row['table_name']
-        
-        # Verify the data in the table
-        if not verify_table_data(conn, table_name):
-            st.write(f"No valid data found in table {table_name}. Skipping.")
-            continue
-        
-        df = query_geometries_within_polygon(conn, table_name, polygon_geojson)
-        if not df.empty:
-            df['table_name'] = table_name
-            all_data.append(df)
-    
-    conn.close()
-    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
 # Function to add geometries to map
 def add_geometries_to_map(geojson_list, map_object):
@@ -118,19 +58,21 @@ def add_geometries_to_map(geojson_list, map_object):
 
 st.title('Streamlit Map Application')
 
-# Create a Leafmap centered on Los Angeles
+# Create a Folium map centered on Los Angeles
 m = leafmap.Map(center=[34.0522, -118.2437], zoom_start=10)
 
 # Add drawing options to the map
-draw = leafmap.DrawControl(
-    layer_name="Drawn Polygon",
-    polygon={"shapeOptions": {"color": "#0000FF"}},
-    edit={"edit": True, "remove": True}
+draw = Draw(
+    export=True,
+    filename='data.geojson',
+    position='topleft',
+    draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
+    edit_options={'edit': False}
 )
-m.add_control(draw)
+draw.add_to(m)
 
-# Display the map using Leafmap
-st_data = m.to_streamlit(height=700)
+# Display the map using Streamlit-Folium
+st_data = st_folium(m, width=700, height=500)
 
 # Handle the drawn polygon
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
@@ -139,12 +81,15 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
     
     if st.button('Query Database'):
         try:
-            df = query_all_tables_within_polygon(polygon_geojson)
-            if not df.empty:
-                geojson_list = df['geometry'].tolist()
-                add_geometries_to_map(geojson_list, m)
-                st_data = m.to_streamlit(height=700)
-            else:
-                st.write("No geometries found within the drawn polygon.")
+            conn = get_connection()
+            if conn:
+                df = query_geometries_within_polygon(conn, polygon_geojson)
+                if not df.empty:
+                    geojson_list = df['geometry'].tolist()
+                    add_geometries_to_map(geojson_list, m)
+                    st_data = st_folium(m, width=700, height=500)
+                else:
+                    st.write("No geometries found within the drawn polygon.")
+                conn.close()
         except Exception as e:
             st.error(f"Error: {e}")
