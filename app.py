@@ -32,48 +32,30 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Query geometries within a polygon from all public tables
+# Query geometries within a polygon
 def query_geometries_within_polygon(polygon_geojson):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
     try:
-        # Get all public tables with SHAPE column
-        table_query = """
-        SELECT table_name
-        FROM information_schema.columns
-        WHERE column_name = 'SHAPE' AND table_schema = 'public';
+        query = f"""
+        SELECT *, "SHAPE"::text as geometry, srid
+        FROM public.rwmainlineonli_exportfeature
+        WHERE ST_Intersects(
+            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
+            ST_SetSRID(
+                ST_GeomFromGeoJSON('{polygon_geojson}'),
+                4326
+            )
+        );
         """
-        tables = pd.read_sql(table_query, conn)
-        st.write("Tables found:", tables)  # Debug statement
-        
-        all_data = []
-        for table_name in tables['table_name']:
-            query = f"""
-            SELECT *, "SHAPE"::text as geometry, srid
-            FROM public.{table_name}
-            WHERE ST_Intersects(
-                ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
-                ST_SetSRID(
-                    ST_GeomFromGeoJSON('{polygon_geojson}'),
-                    4326
-                )
-            );
-            """
-            df = pd.read_sql(query, conn)
-            st.write(f"Data from {table_name}:", df.head())  # Debug statement
-            all_data.append(df)
-        
+        df = pd.read_sql(query, conn)
         conn.close()
-        
-        if all_data:
-            combined_df = pd.concat(all_data, ignore_index=True)
-            st.write("Combined DataFrame before dropping duplicates:", combined_df)  # Debug statement
-            combined_df = combined_df.drop_duplicates().reset_index(drop=True)  # Ensure no duplicates
-            st.write("Combined DataFrame after dropping duplicates:", combined_df)  # Debug statement
-            return combined_df
-        else:
-            return pd.DataFrame()
+
+        # Ensure no duplicate columns
+        df = df.loc[:, ~df.columns.duplicated()]
+
+        return df
     except Exception as e:
         st.error(f"Query error: {e}")
         return pd.DataFrame()
