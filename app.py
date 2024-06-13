@@ -2,9 +2,11 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 import json
-import leafmap.foliumap as leafmap
-from streamlit_folium import st_folium
 import folium
+from streamlit_folium import st_folium
+from shapely.geometry import shape
+from shapely.ops import transform
+import pyproj
 
 # Database connection function
 def get_connection():
@@ -57,7 +59,7 @@ def add_geometries_to_map(geojson_list, map_object):
 st.title('Streamlit Map Application')
 
 # Create a Folium map centered on Los Angeles
-m = leafmap.Map(center=[34.0522, -118.2437], zoom_start=10)
+m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
 
 # Display the map using Streamlit-Folium
 st_data = st_folium(m, width=700, height=500)
