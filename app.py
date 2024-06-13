@@ -34,8 +34,9 @@ def fetch_tables_with_geometry(conn):
 # Verify data in a table
 def verify_table_data(conn, table_name, geom_column):
     query = f"""
-    SELECT COUNT(*), ST_SRID({geom_column}), ST_AsText({geom_column}) as geom_text
+    SELECT COUNT(*), pg_typeof({geom_column}) as geom_type, ST_AsText({geom_column}) as geom_text
     FROM public.{table_name}
+    WHERE {geom_column} IS NOT NULL
     GROUP BY {geom_column}
     LIMIT 5;
     """
