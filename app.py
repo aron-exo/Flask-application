@@ -2,9 +2,7 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 import json
-import folium
-from streamlit_folium import st_folium
-from folium.plugins import Draw
+import plotly.express as px
 
 # Database connection function
 def get_connection():
@@ -22,133 +20,69 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Verify data in a table
-def verify_table_data(conn, table_name):
-    count_query = f"""
-    SELECT COUNT(*)
-    FROM public.{table_name}
-    WHERE "SHAPE" IS NOT NULL;
-    """
-    type_query = f"""
-    SELECT pg_typeof("SHAPE") as geom_type
-    FROM public.{table_name}
-    WHERE "SHAPE" IS NOT NULL
-    LIMIT 1;
-    """
-    st.write(f"Verifying data in table {table_name}:")
-    st.write(count_query)
-    count_df = pd.read_sql(count_query, conn)
-    st.write(type_query)
-    type_df = pd.read_sql(type_query, conn)
-    st.write(f"Sample data from table {table_name}:")
-    st.write(count_df)
-    st.write(type_df)
-    return not count_df.empty and not type_df.empty
-
-# Query geometries within a polygon from a specific table
-def query_geometries_within_polygon(conn, table_name, polygon_geojson):
-    try:
-        query = f"""
-        SELECT ST_AsGeoJSON("SHAPE"::geometry) as geometry
-        FROM public.{table_name}
-        WHERE ST_Intersects(
-            "SHAPE"::geometry,
-            ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
-        );
-        """
-        st.write(f"Running query on table {table_name}:")
-        st.write(query)
-        df = pd.read_sql(query, conn)
-        st.write(f"Result for table {table_name}: {len(df)} rows")
-        return df
-    except Exception as e:
-        st.error(f"Query error in table {table_name}: {e}")
-        return pd.DataFrame()
-
-# Query geometries within a polygon from all tables
-def query_all_tables_within_polygon(polygon_geojson):
-    conn = get_connection()
-    if conn is None:
-        return pd.DataFrame()
-
-    # Assuming all public tables have the SHAPE column
+# Fetch all tables with geometry data
+def fetch_tables_with_geometry(conn):
     query = """
     SELECT table_name
     FROM information_schema.columns
     WHERE column_name = 'SHAPE' AND table_schema = 'public';
     """
     tables = pd.read_sql(query, conn)
+    return tables
+
+# Fetch data from a specific table within a drawn polygon
+def fetch_data_within_polygon(conn, table_name, polygon_geojson):
+    query = f"""
+    SELECT ST_AsGeoJSON("SHAPE"::geometry) as geometry
+    FROM public.{table_name}
+    WHERE ST_Intersects(
+        "SHAPE"::geometry,
+        ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
+    );
+    """
+    df = pd.read_sql(query, conn)
+    return df
+
+# Main function to run the app
+def main():
+    st.title('Interactive GIS Map with Plotly and Streamlit')
+
+    conn = get_connection()
+    if conn is None:
+        return
+
+    tables = fetch_tables_with_geometry(conn)
     st.write("Fetched tables with SHAPE column:")
     st.write(tables)
 
-    all_data = []
-    for index, row in tables.iterrows():
-        table_name = row['table_name']
-        
-        # Verify the data in the table
-        if not verify_table_data(conn, table_name):
-            st.write(f"No valid data found in table {table_name}. Skipping.")
-            continue
-        
-        df = query_geometries_within_polygon(conn, table_name, polygon_geojson)
+    selected_table = st.selectbox('Select a table to visualize:', tables['table_name'])
+    if selected_table:
+        st.write(f"Fetching data from {selected_table}...")
+
+        polygon_geojson = '{"type": "Polygon", "coordinates": [[[-118.269196, 33.879537], [-118.256836, 33.914873], [-118.203278, 33.897777], [-118.219757, 33.866995], [-118.269196, 33.879537]]]}'
+        df = fetch_data_within_polygon(conn, selected_table, polygon_geojson)
+
         if not df.empty:
-            df['table_name'] = table_name
-            all_data.append(df)
-    
-    conn.close()
-    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
+            st.write(f"Displaying {len(df)} geometries from {selected_table}")
+            geometries = [json.loads(geom) for geom in df['geometry']]
 
-# Function to add geometries to map
-def add_geometries_to_map(geojson_list, map_object):
-    for geojson in geojson_list:
-        st.write(f"Adding geometry to map: {geojson}")
-        if isinstance(geojson, str):
-            geometry = json.loads(geojson)
+            # Extract coordinates for visualization
+            coords = []
+            for geom in geometries:
+                if geom['type'] == 'Point':
+                    coords.append(geom['coordinates'])
+                elif geom['type'] == 'LineString':
+                    coords.extend(geom['coordinates'])
+                elif geom['type'] == 'Polygon':
+                    coords.extend(geom['coordinates'][0])
+
+            coords_df = pd.DataFrame(coords, columns=['lon', 'lat'])
+            fig = px.scatter_mapbox(coords_df, lat='lat', lon='lon', zoom=10)
+            fig.update_layout(mapbox_style="open-street-map")
+
+            st.plotly_chart(fig)
         else:
-            geometry = geojson  # Assuming it's already a dict
-        
-        st.write(f"Parsed geometry: {geometry}")
+            st.write("No geometries found within the drawn polygon.")
 
-        if geometry['type'] == 'Point':
-            folium.Marker(location=[geometry['coordinates'][1], geometry['coordinates'][0]]).add_to(map_object)
-        elif geometry['type'] == 'LineString':
-            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in geometry['coordinates']]).add_to(map_object)
-        elif geometry['type'] == 'Polygon':
-            folium.Polygon(locations=[(coord[1], coord[0]) for coord in geometry['coordinates'][0]]).add_to(map_object)
-        else:
-            st.write(f"Unsupported geometry type: {geometry['type']}")
-
-st.title('Streamlit Map Application')
-
-# Create a Folium map centered on Los Angeles
-m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
-
-# Add drawing options to the map
-draw = Draw(
-    export=True,
-    filename='data.geojson',
-    position='topleft',
-    draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
-    edit_options={'edit': False}
-)
-draw.add_to(m)
-
-# Display the map using Streamlit-Folium
-st_data = st_folium(m, width=700, height=500)
-
-# Handle the drawn polygon
-if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
-    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-    st.write('Polygon GeoJSON:', polygon_geojson)
-    
-    if st.button('Query Database'):
-        try:
-            df = query_all_tables_within_polygon(polygon_geojson)
-            if not df.empty:
-                geojson_list = df['geometry'].tolist()
-                add_geometries_to_map(geojson_list, m)
-                st_data = st_folium(m, width=700, height=500)
-            else:
-                st.write("No geometries found within the drawn polygon.")
-        except Exception as e:
-            st.error(f"Error: {e}")
+if __name__ == "__main__":
+    main()
