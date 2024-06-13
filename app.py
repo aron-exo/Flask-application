@@ -3,6 +3,9 @@ import pandas as pd
 import psycopg2
 import json
 import folium
+import pyproj
+from shapely.geometry import shape
+from shapely.ops import transform
 from streamlit_folium import st_folium
 
 # Database connection function
@@ -25,7 +28,7 @@ def get_connection():
 def query_all_geometries(conn):
     try:
         query = """
-        SELECT "SHAPE"::text as geometry
+        SELECT "SHAPE"::text as geometry, srid
         FROM public.rwmainlineonli_exportfeature
         WHERE "SHAPE" IS NOT NULL;
         """
@@ -38,20 +41,32 @@ def query_all_geometries(conn):
         st.error(f"Query error: {e}")
         return pd.DataFrame()
 
-# Function to add geometries to map
-def add_geometries_to_map(geojson_list, map_object):
-    for geojson in geojson_list:
+# Function to add geometries to map with coordinate transformation
+def add_geometries_to_map(geojson_list, srid_list, map_object):
+    for geojson, srid in zip(geojson_list, srid_list):
         st.write(f"Adding geometry to map: {geojson}")
         geometry = json.loads(geojson)
+
+        # Define the source and destination coordinate systems
+        src_crs = pyproj.CRS(f"EPSG:{srid}")
+        dst_crs = pyproj.CRS("EPSG:4326")
+        transformer = pyproj.Transformer.from_crs(src_crs, dst_crs, always_xy=True)
+
+        # Transform the geometry to the geographic coordinate system
+        shapely_geom = shape(geometry)
+        transformed_geom = transform(transformer.transform, shapely_geom)
         
-        if geometry['type'] == 'Point':
-            folium.Marker(location=[geometry['coordinates'][1], geometry['coordinates'][0]]).add_to(map_object)
-        elif geometry['type'] == 'LineString':
-            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in geometry['coordinates']]).add_to(map_object)
-        elif geometry['type'] == 'Polygon':
-            folium.Polygon(locations=[(coord[1], coord[0]) for coord in geometry['coordinates'][0]]).add_to(map_object)
+        if transformed_geom.geom_type == 'Point':
+            folium.Marker(location=[transformed_geom.y, transformed_geom.x]).add_to(map_object)
+        elif transformed_geom.geom_type == 'LineString':
+            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords]).add_to(map_object)
+        elif transformed_geom.geom_type == 'Polygon':
+            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords]).add_to(map_object)
+        elif transformed_geom.geom_type == 'MultiLineString':
+            for line in transformed_geom:
+                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords]).add_to(map_object)
         else:
-            st.write(f"Unsupported geometry type: {geometry['type']}")
+            st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
 st.title('Streamlit Map Application')
 
@@ -68,7 +83,8 @@ if st.button('Display All Geometries'):
             df = query_all_geometries(conn)
             if not df.empty:
                 geojson_list = df['geometry'].tolist()
-                add_geometries_to_map(geojson_list, m)
+                srid_list = df['srid'].tolist()
+                add_geometries_to_map(geojson_list, srid_list, m)
                 st_data = st_folium(m, width=700, height=500)
             else:
                 st.write("No geometries found in the table.")
