@@ -32,41 +32,25 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Query all public tables with SHAPE column
-def get_public_tables_with_shape():
-    conn = get_connection()
-    if conn is None:
-        return []
-    try:
-        query = """
-        SELECT table_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' AND column_name = 'SHAPE';
-        """
-        df = pd.read_sql(query, conn)
-        conn.close()
-        return df['table_name'].tolist()
-    except Exception as e:
-        st.error(f"Query error: {e}")
-        return []
-
-# Query geometries within a polygon from all tables
+# Query geometries within a polygon from all public tables
 def query_geometries_within_polygon(polygon_geojson):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
-    
-    tables = get_public_tables_with_shape()
-    all_data = []
-    
-    progress_bar = st.progress(0)
-    total_tables = len(tables)
-    
-    for i, table in enumerate(tables):
-        try:
+    try:
+        # Get all public tables with SHAPE column
+        table_query = """
+        SELECT table_name
+        FROM information_schema.columns
+        WHERE column_name = 'SHAPE' AND table_schema = 'public';
+        """
+        tables = pd.read_sql(table_query, conn)
+        
+        all_data = []
+        for table_name in tables['table_name']:
             query = f"""
             SELECT *, "SHAPE"::text as geometry, srid
-            FROM public.{table}
+            FROM public.{table_name}
             WHERE ST_Intersects(
                 ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
                 ST_SetSRID(
@@ -76,21 +60,18 @@ def query_geometries_within_polygon(polygon_geojson):
             );
             """
             df = pd.read_sql(query, conn)
-            if not df.empty:
-                df['table_name'] = table  # Add table name to metadata
-                all_data.append(df)
-        except Exception as e:
-            st.error(f"Query error in table {table}: {e}")
+            df['table_name'] = table_name
+            all_data.append(df)
         
-        # Update progress bar
-        progress_bar.progress((i + 1) / total_tables)
-    
-    conn.close()
-    progress_bar.empty()
-    
-    if all_data:
-        return pd.concat(all_data, ignore_index=True)
-    else:
+        conn.close()
+        if all_data:
+            combined_df = pd.concat(all_data, ignore_index=True)
+            combined_df = combined_df.drop_duplicates().reset_index(drop=True)  # Ensure no duplicates
+            return combined_df
+        else:
+            return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Query error: {e}")
         return pd.DataFrame()
 
 # Function to add geometries to map with coordinate transformation
@@ -113,7 +94,6 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 
         # Remove the 'geometry' field from metadata for the popup
         metadata.pop('geometry', None)
-        metadata.pop('SHAPE', None)
         
         # Create a popup with metadata (other columns)
         metadata_html = "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
@@ -151,7 +131,7 @@ if not st.session_state.map_initialized:
     st.session_state.map_initialized = True
 
 # Handle the drawn polygon
-st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_map")
+st_data = st_folium(st.session_state.map, width=700, height=500, key="map")
 
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
@@ -160,7 +140,6 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
         try:
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
-                df.reset_index(drop=True, inplace=True)  # Reset index to ensure unique values
                 st.session_state.geojson_list = df['geometry'].tolist()
                 st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
                 
