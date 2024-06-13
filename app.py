@@ -31,6 +31,21 @@ def fetch_tables_with_geometry(conn):
     tables = pd.read_sql(query, conn)
     return tables
 
+# Verify data in a table
+def verify_table_data(conn, table_name, geom_column):
+    query = f"""
+    SELECT COUNT(*), ST_SRID({geom_column}), ST_AsText({geom_column}) as geom_text
+    FROM public.{table_name}
+    GROUP BY {geom_column}
+    LIMIT 5;
+    """
+    st.write(f"Verifying data in table {table_name}:")
+    st.write(query)
+    df = pd.read_sql(query, conn)
+    st.write(f"Sample data from table {table_name}:")
+    st.write(df)
+    return not df.empty
+
 # Query data from the database for a specific table
 def query_table_data(conn, table_name, geom_column, polygon_geojson):
     try:
@@ -42,6 +57,8 @@ def query_table_data(conn, table_name, geom_column, polygon_geojson):
             {geom_column}
         );
         """
+        st.write(f"Running query on table {table_name}:")
+        st.write(query)
         df = pd.read_sql(query, conn)
         st.write(f"Result for table {table_name}: {len(df)} rows")
         return df
@@ -63,6 +80,11 @@ def query_all_tables(polygon_geojson):
     for index, row in tables.iterrows():
         table_name = row['f_table_name']
         geom_column = row['f_geometry_column']
+        
+        # Verify the data in the table
+        if not verify_table_data(conn, table_name, geom_column):
+            continue
+        
         df = query_table_data(conn, table_name, geom_column, polygon_geojson)
         if not df.empty:
             df['table_name'] = table_name
