@@ -91,25 +91,5 @@ if st.button('Display All Geometries'):
 if st.session_state.geojson_list:
     add_geometries_to_map(st.session_state.geojson_list, st.session_state.srid_list, m)
 
-# Add custom CSS to remove any unwanted foreground layers
-st.markdown(
-    """
-    <style>
-    .streamlit-folium {
-        position: absolute;
-        top: 0;
-        right: 0;
-        left: 0;
-        bottom: 0;
-        z-index: 1;
-    }
-    .overlay {
-        display: none;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 # Display the map using Streamlit-Folium
 st_data = st_folium(m, width=700, height=500)
