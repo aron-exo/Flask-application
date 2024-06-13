@@ -27,7 +27,6 @@ def get_connection():
             password=st.secrets["db_password"],
             port=st.secrets["db_port"]
         )
-        st.write("Connection to database established.")
         return conn
     except Exception as e:
         st.error(f"Connection error: {e}")
@@ -61,7 +60,6 @@ def query_geometries_within_polygon(polygon_geojson):
 def add_geometries_to_map(geojson_list, metadata_list, map_object):
     for geojson, metadata in zip(geojson_list, metadata_list):
         if 'srid' not in metadata:
-            st.error(f"SRID not found in metadata: {metadata}")
             continue
 
         srid = metadata.pop('srid')
@@ -98,7 +96,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 st.title('Streamlit Map Application')
 
 # Create a Folium map centered on Los Angeles if not already done
-if not st.session_state.map_initialized:
+def initialize_map():
     m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
     draw = Draw(
         export=True,
@@ -108,7 +106,10 @@ if not st.session_state.map_initialized:
         edit_options={'edit': False}
     )
     draw.add_to(m)
-    st.session_state.map = m
+    return m
+
+if not st.session_state.map_initialized:
+    st.session_state.map = initialize_map()
     st.session_state.map_initialized = True
 
 # Handle the drawn polygon
@@ -116,7 +117,6 @@ st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_ma
 
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-    st.write('Polygon GeoJSON:', polygon_geojson)
     
     if st.button('Query Database'):
         try:
@@ -126,8 +126,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
                 st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
                 
                 # Clear the existing map and reinitialize it
-                m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
-                draw.add_to(m)
+                m = initialize_map()
                 add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
                 st.session_state.map = m
             else:
