@@ -26,10 +26,14 @@ def get_connection():
 def query_geometries_within_bbox(conn, min_lat, min_long, max_lat, max_long):
     try:
         query = f"""
-        SELECT geometry
-        FROM geometries_in_bbox({min_lat}, {min_long}, {max_lat}, {max_long});
+        SELECT ST_AsGeoJSON("SHAPE"::geometry) as geometry
+        FROM public.your_table_name
+        WHERE ST_Intersects(
+            "SHAPE"::geometry,
+            ST_MakeEnvelope({min_long}, {min_lat}, {max_long}, {max_lat}, 4326)
+        );
         """
-        st.write(f"Running query:")
+        st.write("Running query:")
         st.write(query)
         df = pd.read_sql(query, conn)
         st.write(f"Result: {len(df)} rows")
