@@ -70,7 +70,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         shapely_geom = shape(geometry)
         transformed_geom = transform(transformer.transform, shapely_geom)
 
-        # Create a popup with metadata
+        # Create a popup with metadata (other columns)
         metadata_html = "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
         popup = folium.Popup(metadata_html, max_width=300)
 
@@ -114,7 +114,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
                 st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.metadata_list = df.drop(columns=['geometry']).to_dict(orient='records')
+                st.session_state.metadata_list = df.drop(columns=['geometry', 'srid']).to_dict(orient='records')
                 
                 add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
                 st_data = st_folium(m, width=700, height=500)
