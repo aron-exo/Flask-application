@@ -6,3 +6,4 @@ streamlit-folium
 python-dotenv
 pyproj
 shapely
+plotly
