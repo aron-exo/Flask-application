@@ -4,7 +4,7 @@ import psycopg2
 import json
 import folium
 import pyproj
-from shapely.geometry import shape, MultiLineString
+from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
 
@@ -44,7 +44,6 @@ def query_all_geometries(conn):
 # Function to add geometries to map with coordinate transformation
 def add_geometries_to_map(geojson_list, srid_list, map_object):
     for geojson, srid in zip(geojson_list, srid_list):
-        st.write(f"Adding geometry to map: {geojson}")
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
