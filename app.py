@@ -14,6 +14,8 @@ if 'geojson_list' not in st.session_state:
     st.session_state.geojson_list = []
 if 'metadata_list' not in st.session_state:
     st.session_state.metadata_list = []
+if 'polygon_geojson' not in st.session_state:
+    st.session_state.polygon_geojson = None
 
 # Database connection function
 def get_connection():
@@ -98,17 +100,20 @@ st_data = st_folium(m, width=700, height=500)
 # Handle the drawn polygon
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-    st.write('Polygon GeoJSON:', polygon_geojson)
-    
-    if st.button('Query Database'):
-        try:
-            df = query_geometries_within_polygon(polygon_geojson)
-            if not df.empty:
-                st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
-                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
-                st_data = st_folium(m, width=700, height=500)
-            else:
-                st.write("No geometries found within the drawn polygon.")
-        except Exception as e:
-            st.error(f"Error: {e}")
+    st.session_state.polygon_geojson = polygon_geojson
+
+if st.session_state.polygon_geojson and st.button('Query Database'):
+    try:
+        df = query_geometries_within_polygon(st.session_state.polygon_geojson)
+        if not df.empty:
+            st.session_state.geojson_list = df['geometry'].tolist()
+            st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
+    except Exception as e:
+        st.error(f"Error: {e}")
+
+# Add geometries from session state to the map
+if st.session_state.geojson_list:
+    add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
+
+# Display the updated map with geometries using Streamlit-Folium
+st_folium(m, width=700, height=500)
