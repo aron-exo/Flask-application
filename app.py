@@ -36,7 +36,7 @@ def fetch_tables_with_geometry(conn):
 # Verify data in a table
 def verify_table_data(conn, table_name, geom_column):
     query = f"""
-    SELECT COUNT(*), pg_typeof({geom_column}) as geom_type, ST_AsText({geom_column}) as geom_text
+    SELECT COUNT(*), ST_SRID({geom_column}) as srid, ST_AsText({geom_column}) as geom_text
     FROM public.{table_name}
     WHERE {geom_column} IS NOT NULL
     GROUP BY {geom_column}
@@ -54,7 +54,8 @@ def query_all_geometries(conn, table_name, geom_column):
     try:
         query = f"""
         SELECT ST_AsGeoJSON({geom_column}) as geometry
-        FROM public.{table_name};
+        FROM public.{table_name}
+        WHERE ST_SRID({geom_column}) = 4326;
         """
         st.write(f"Running query on table {table_name}:")
         st.write(query)
