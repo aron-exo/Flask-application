@@ -16,6 +16,8 @@ if 'metadata_list' not in st.session_state:
     st.session_state.metadata_list = []
 if 'map_initialized' not in st.session_state:
     st.session_state.map_initialized = False
+if 'table_columns' not in st.session_state:
+    st.session_state.table_columns = {}
 
 # Database connection function
 def get_connection():
@@ -48,6 +50,24 @@ def get_tables_with_shape_column():
         return df['table_name'].tolist()
     except Exception as e:
         st.error(f"Error fetching table names: {e}")
+        return []
+
+# Get column names for a specific table
+def get_table_columns(table_name):
+    conn = get_connection()
+    if conn is None:
+        return []
+    try:
+        query = f"""
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = '{table_name}' AND table_schema = 'public';
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
+        return df['column_name'].tolist()
+    except Exception as e:
+        st.error(f"Error fetching columns for table {table_name}: {e}")
         return []
 
 # Query geometries within a polygon for a specific table
@@ -91,6 +111,7 @@ def query_geometries_within_polygon(polygon_geojson):
         if not df.empty:
             df['table_name'] = table
             all_data.append(df)
+            st.session_state.table_columns[table] = get_table_columns(table)
         progress_bar.progress((idx + 1) / total_tables)
 
     if all_data:
@@ -121,8 +142,9 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         metadata.pop('geometry', None)
         metadata.pop('SHAPE', None)
 
-        # Filter metadata to only include columns from the current table
-        filtered_metadata = {key: value for key, value in metadata.items() if key not in ['geometry', 'SHAPE']}
+        # Filter metadata to include only columns from the respective table
+        table_columns = st.session_state.table_columns.get(table_name, [])
+        filtered_metadata = {key: value for key, value in metadata.items() if key in table_columns and pd.notna(value) and value != ''}
 
         # Create a popup with metadata (other columns)
         metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in filtered_metadata.items()])
