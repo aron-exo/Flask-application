@@ -8,6 +8,12 @@ from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
 
+# Initialize session state for geometries if not already done
+if 'geojson_list' not in st.session_state:
+    st.session_state.geojson_list = []
+if 'srid_list' not in st.session_state:
+    st.session_state.srid_list = []
+
 # Database connection function
 def get_connection():
     try:
@@ -78,11 +84,12 @@ m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
 if st.button('Display All Geometries'):
     df = query_all_geometries()
     if not df.empty:
-        geojson_list = df['geometry'].tolist()
-        srid_list = df['srid'].tolist()
-        add_geometries_to_map(geojson_list, srid_list, m)
-    else:
-        st.write("No geometries found in the table.")
+        st.session_state.geojson_list = df['geometry'].tolist()
+        st.session_state.srid_list = df['srid'].tolist()
+
+# Add geometries from session state to the map
+if st.session_state.geojson_list:
+    add_geometries_to_map(st.session_state.geojson_list, st.session_state.srid_list, m)
 
 # Display the map using Streamlit-Folium
 st_data = st_folium(m, width=700, height=500)
