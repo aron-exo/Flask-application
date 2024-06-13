@@ -57,8 +57,7 @@ def query_geometries_within_polygon(polygon_geojson):
 
 # Function to add geometries to map with coordinate transformation
 def add_geometries_to_map(geojson_list, metadata_list, map_object):
-    for metadata in metadata_list:
-        geojson = metadata.pop('geometry')
+    for geojson, metadata in zip(geojson_list, metadata_list):
         srid = metadata.pop('srid')
 
         geometry = json.loads(geojson)
