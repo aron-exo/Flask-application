@@ -24,10 +24,9 @@ def get_connection():
 # Verify data in a table
 def verify_table_data(conn, table_name):
     query = f"""
-    SELECT COUNT(*), pg_typeof("SHAPE") as geom_type, "SHAPE"
+    SELECT COUNT(*), pg_typeof("SHAPE") as geom_type
     FROM public.{table_name}
-    WHERE "SHAPE" IS NOT NULL
-    LIMIT 5;
+    WHERE "SHAPE" IS NOT NULL;
     """
     st.write(f"Verifying data in table {table_name}:")
     st.write(query)
