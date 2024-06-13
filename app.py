@@ -32,15 +32,33 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Query geometries within a polygon
-def query_geometries_within_polygon(polygon_geojson):
+# Query all tables with a "SHAPE" column
+def get_tables_with_shape_column():
+    conn = get_connection()
+    if conn is None:
+        return []
+    try:
+        query = """
+        SELECT table_name 
+        FROM information_schema.columns 
+        WHERE column_name = 'SHAPE' AND table_schema = 'public';
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
+        return df['table_name'].tolist()
+    except Exception as e:
+        st.error(f"Error fetching table names: {e}")
+        return []
+
+# Query geometries within a polygon for a specific table
+def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
     try:
         query = f"""
         SELECT *, "SHAPE"::text as geometry, srid
-        FROM public.rwmainlineonli_exportfeature
+        FROM public.{table_name}
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
             ST_SetSRID(
@@ -57,7 +75,21 @@ def query_geometries_within_polygon(polygon_geojson):
 
         return df
     except Exception as e:
-        st.error(f"Query error: {e}")
+        st.error(f"Query error in table {table_name}: {e}")
+        return pd.DataFrame()
+
+# Query geometries within a polygon for all relevant tables
+def query_geometries_within_polygon(polygon_geojson):
+    tables = get_tables_with_shape_column()
+    all_data = []
+    for table in tables:
+        df = query_geometries_within_polygon_for_table(table, polygon_geojson)
+        if not df.empty:
+            df['table_name'] = table
+            all_data.append(df)
+    if all_data:
+        return pd.concat(all_data, ignore_index=True)
+    else:
         return pd.DataFrame()
 
 # Function to add geometries to map with coordinate transformation
