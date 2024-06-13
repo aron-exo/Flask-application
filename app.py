@@ -8,6 +8,8 @@ from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
 from folium.plugins import Draw
+from pyproj.exceptions import CRSError
+from pyproj.database import query_crs_info
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -99,35 +101,50 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
             continue
 
         srid = metadata.pop('srid')
+
+        # Handle deprecated SRIDs
+        if srid == 102645:
+            srid = 2229
+
         geometry = json.loads(geojson)
 
-        # Define the source and destination coordinate systems
-        src_crs = pyproj.CRS(f"EPSG:{srid}")
-        dst_crs = pyproj.CRS("EPSG:4326")
-        transformer = pyproj.Transformer.from_crs(src_crs, dst_crs, always_xy=True)
+        try:
+            # Check if the CRS is available
+            src_crs_info = query_crs_info(auth_name="EPSG", code=str(srid))
+            if not src_crs_info:
+                st.write(f"Unsupported CRS: EPSG:{srid}")
+                continue
 
-        # Transform the geometry to the geographic coordinate system
-        shapely_geom = shape(geometry)
-        transformed_geom = transform(transformer.transform, shapely_geom)
+            # Define the source and destination coordinate systems
+            src_crs = pyproj.CRS(f"EPSG:{srid}")
+            dst_crs = pyproj.CRS("EPSG:4326")
+            transformer = pyproj.Transformer.from_crs(src_crs, dst_crs, always_xy=True)
 
-        # Remove the 'geometry' field from metadata for the popup
-        metadata.pop('geometry', None)
-        
-        # Create a popup with metadata (other columns)
-        metadata_html = "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
-        popup = folium.Popup(metadata_html, max_width=300)
+            # Transform the geometry to the geographic coordinate system
+            shapely_geom = shape(geometry)
+            transformed_geom = transform(transformer.transform, shapely_geom)
 
-        if transformed_geom.geom_type == 'Point':
-            folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
-        elif transformed_geom.geom_type == 'LineString':
-            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup).add_to(map_object)
-        elif transformed_geom.geom_type == 'Polygon':
-            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup).add_to(map_object)
-        elif transformed_geom.geom_type == 'MultiLineString':
-            for line in transformed_geom.geoms:
-                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup).add_to(map_object)
-        else:
-            st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
+            # Remove the 'geometry' field from metadata for the popup
+            metadata.pop('geometry', None)
+            
+            # Create a popup with metadata (other columns)
+            metadata_html = "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
+            popup = folium.Popup(metadata_html, max_width=300)
+
+            if transformed_geom.geom_type == 'Point':
+                folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
+            elif transformed_geom.geom_type == 'LineString':
+                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup).add_to(map_object)
+            elif transformed_geom.geom_type == 'Polygon':
+                folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup).add_to(map_object)
+            elif transformed_geom.geom_type == 'MultiLineString':
+                for line in transformed_geom.geoms:
+                    folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup).add_to(map_object)
+            else:
+                st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
+
+        except CRSError:
+            st.write(f"Invalid CRS: EPSG:{srid}")
 
 st.title('Streamlit Map Application')
 
