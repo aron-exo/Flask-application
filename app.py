@@ -113,6 +113,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 
         # Remove the 'geometry' field from metadata for the popup
         metadata.pop('geometry', None)
+        metadata.pop('SHAPE', None)
         
         # Create a popup with metadata (other columns)
         metadata_html = "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
@@ -159,6 +160,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
         try:
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
+                df.reset_index(drop=True, inplace=True)  # Reset index to ensure unique values
                 st.session_state.geojson_list = df['geometry'].tolist()
                 st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
                 
