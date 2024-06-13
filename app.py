@@ -23,17 +23,26 @@ def get_connection():
 
 # Verify data in a table
 def verify_table_data(conn, table_name):
-    query = f"""
-    SELECT COUNT(*), pg_typeof("SHAPE") as geom_type
+    count_query = f"""
+    SELECT COUNT(*)
     FROM public.{table_name}
     WHERE "SHAPE" IS NOT NULL;
     """
+    type_query = f"""
+    SELECT pg_typeof("SHAPE") as geom_type
+    FROM public.{table_name}
+    WHERE "SHAPE" IS NOT NULL
+    LIMIT 1;
+    """
     st.write(f"Verifying data in table {table_name}:")
-    st.write(query)
-    df = pd.read_sql(query, conn)
+    st.write(count_query)
+    count_df = pd.read_sql(count_query, conn)
+    st.write(type_query)
+    type_df = pd.read_sql(type_query, conn)
     st.write(f"Sample data from table {table_name}:")
-    st.write(df)
-    return not df.empty
+    st.write(count_df)
+    st.write(type_df)
+    return not count_df.empty and not type_df.empty
 
 # Query all geometries from a specific table
 def query_all_geometries(conn, table_name):
