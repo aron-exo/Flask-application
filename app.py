@@ -107,6 +107,22 @@ if 'geojson_list' not in st.session_state:
 if 'metadata_list' not in st.session_state:
     st.session_state.metadata_list = []
 
+# Create a Plotly map centered on Los Angeles
+fig = go.Figure()
+if st.session_state.geojson_list:
+    fig = plot_geometries(st.session_state.geojson_list, st.session_state.metadata_list)
+else:
+    fig.update_layout(
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=34.0522, lon=-118.2437),
+            zoom=10
+        ),
+        margin={"r":0,"t":0,"l":0,"b":0}
+    )
+
+st.plotly_chart(fig, use_container_width=True)
+
 # Handle the drawn polygon
 if 'last_active_drawing' in st.session_state:
     polygon_geojson = json.dumps(st.session_state['last_active_drawing']['geometry'])
@@ -118,17 +134,12 @@ if 'last_active_drawing' in st.session_state:
                 st.session_state.geojson_list = df['geometry'].tolist()
                 st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
                 st.session_state['last_active_drawing'] = None
+                fig = plot_geometries(st.session_state.geojson_list, st.session_state.metadata_list)
+                st.plotly_chart(fig, use_container_width=True)
             else:
                 st.write("No geometries found within the drawn polygon.")
         except Exception as e:
             st.error(f"Error: {e}")
-
-# Create a Plotly map centered on Los Angeles
-fig = go.Figure()
-if st.session_state.geojson_list:
-    fig = plot_geometries(st.session_state.geojson_list, st.session_state.metadata_list)
-
-st.plotly_chart(fig, use_container_width=True)
 
 # Add drawing functionality using a hidden input to store the drawing
 st.write("Draw a polygon on the map")
