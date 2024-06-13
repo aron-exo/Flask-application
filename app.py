@@ -59,7 +59,10 @@ def query_geometries_within_polygon(polygon_geojson):
     tables = get_public_tables_with_shape()
     all_data = []
     
-    for table in tables:
+    progress_bar = st.progress(0)
+    total_tables = len(tables)
+    
+    for i, table in enumerate(tables):
         try:
             query = f"""
             SELECT *, "SHAPE"::text as geometry, srid
@@ -78,8 +81,13 @@ def query_geometries_within_polygon(polygon_geojson):
                 all_data.append(df)
         except Exception as e:
             st.error(f"Query error in table {table}: {e}")
+        
+        # Update progress bar
+        progress_bar.progress((i + 1) / total_tables)
     
     conn.close()
+    progress_bar.empty()
+    
     if all_data:
         return pd.concat(all_data, ignore_index=True)
     else:
@@ -152,7 +160,6 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
                 st.session_state.geojson_list = df['geometry'].tolist()
-                df.reset_index(drop=True, inplace=True)  # Reset index to ensure unique values
                 st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
                 
                 # Clear the existing map and reinitialize it
