@@ -82,11 +82,17 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
 def query_geometries_within_polygon(polygon_geojson):
     tables = get_tables_with_shape_column()
     all_data = []
-    for table in tables:
+    
+    progress_bar = st.progress(0)
+    total_tables = len(tables)
+    
+    for idx, table in enumerate(tables):
         df = query_geometries_within_polygon_for_table(table, polygon_geojson)
         if not df.empty:
             df['table_name'] = table
             all_data.append(df)
+        progress_bar.progress((idx + 1) / total_tables)
+
     if all_data:
         return pd.concat(all_data, ignore_index=True)
     else:
@@ -99,6 +105,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
             continue
 
         srid = metadata.pop('srid')
+        table_name = metadata.pop('table_name')
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
@@ -114,7 +121,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         metadata.pop('geometry', None)
         
         # Create a popup with metadata (other columns)
-        metadata_html = "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
+        metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
         popup = folium.Popup(metadata_html, max_width=300)
 
         if transformed_geom.geom_type == 'Point':
@@ -159,7 +166,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
                 st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
+                st.session_state.metadata_list = df.to_dict(orient='records')
                 
                 # Clear the existing map and reinitialize it
                 m = initialize_map()
