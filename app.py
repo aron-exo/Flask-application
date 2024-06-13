@@ -4,7 +4,7 @@ import psycopg2
 import json
 import leafmap.foliumap as leafmap
 from streamlit_folium import st_folium
-from folium.plugins import Draw
+import folium
 
 # Database connection function
 def get_connection():
