@@ -4,6 +4,7 @@ import psycopg2
 import json
 import folium
 from streamlit_folium import st_folium
+from folium.plugins import Draw
 
 # Database connection function
 def get_connection():
@@ -44,26 +45,28 @@ def verify_table_data(conn, table_name):
     st.write(type_df)
     return not count_df.empty and not type_df.empty
 
-# Query all geometries from a specific table
-def query_all_geometries(conn, table_name):
+# Query geometries within a polygon from a specific table
+def query_geometries_within_polygon(conn, table_name, polygon_geojson):
     try:
         query = f"""
-        SELECT "SHAPE"
+        SELECT ST_AsGeoJSON("SHAPE") as geometry
         FROM public.{table_name}
-        WHERE "SHAPE" IS NOT NULL;
+        WHERE ST_Intersects(
+            "SHAPE",
+            ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
+        );
         """
         st.write(f"Running query on table {table_name}:")
         st.write(query)
         df = pd.read_sql(query, conn)
         st.write(f"Result for table {table_name}: {len(df)} rows")
-        st.write(df.head())  # Display the first few rows for debugging
         return df
     except Exception as e:
         st.error(f"Query error in table {table_name}: {e}")
         return pd.DataFrame()
 
-# Query all geometries from all tables
-def query_all_tables():
+# Query geometries within a polygon from all tables
+def query_all_tables_within_polygon(polygon_geojson):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
@@ -87,7 +90,7 @@ def query_all_tables():
             st.write(f"No valid data found in table {table_name}. Skipping.")
             continue
         
-        df = query_all_geometries(conn, table_name)
+        df = query_geometries_within_polygon(conn, table_name, polygon_geojson)
         if not df.empty:
             df['table_name'] = table_name
             all_data.append(df)
@@ -117,21 +120,35 @@ def add_geometries_to_map(geojson_list, map_object):
 
 st.title('Streamlit Map Application')
 
-# Create a Folium map
-m = folium.Map(location=[51.505, -0.09], zoom_start=13)
+# Create a Folium map centered on Los Angeles
+m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
+
+# Add drawing options to the map
+draw = Draw(
+    export=True,
+    filename='data.geojson',
+    position='topleft',
+    draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
+    edit_options={'edit': False}
+)
+draw.add_to(m)
 
 # Display the map using Streamlit-Folium
 st_data = st_folium(m, width=700, height=500)
 
-# Query all geometries from all tables and add them to the map
-if st.button('Display All Geometries'):
-    try:
-        df = query_all_tables()
-        if not df.empty:
-            geojson_list = df['SHAPE'].tolist()
-            add_geometries_to_map(geojson_list, m)
-            st_data = st_folium(m, width=700, height=500)
-        else:
-            st.write("No geometries found in the tables.")
-    except Exception as e:
-        st.error(f"Error: {e}")
+# Handle the drawn polygon
+if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
+    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
+    st.write('Polygon GeoJSON:', polygon_geojson)
+    
+    if st.button('Query Database'):
+        try:
+            df = query_all_tables_within_polygon(polygon_geojson)
+            if not df.empty:
+                geojson_list = df['geometry'].tolist()
+                add_geometries_to_map(geojson_list, m)
+                st_data = st_folium(m, width=700, height=500)
+            else:
+                st.write("No geometries found within the drawn polygon.")
+        except Exception as e:
+            st.error(f"Error: {e}")
