@@ -20,46 +20,92 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Fetch all tables with geometry data
-def fetch_tables_with_geometry(conn):
+# Verify data in a table
+def verify_table_data(conn, table_name):
+    count_query = f"""
+    SELECT COUNT(*)
+    FROM public.{table_name}
+    WHERE "SHAPE" IS NOT NULL;
+    """
+    type_query = f"""
+    SELECT pg_typeof("SHAPE") as geom_type
+    FROM public.{table_name}
+    WHERE "SHAPE" IS NOT NULL
+    LIMIT 1;
+    """
+    st.write(f"Verifying data in table {table_name}:")
+    st.write(count_query)
+    count_df = pd.read_sql(count_query, conn)
+    st.write(type_query)
+    type_df = pd.read_sql(type_query, conn)
+    st.write(f"Sample data from table {table_name}:")
+    st.write(count_df)
+    st.write(type_df)
+    return not count_df.empty and not type_df.empty
+
+# Query geometries within a polygon from a specific table
+def query_geometries_within_polygon(conn, table_name, polygon_geojson):
+    try:
+        query = f"""
+        SELECT ST_AsGeoJSON("SHAPE"::geometry) as geometry
+        FROM public.{table_name}
+        WHERE ST_Intersects(
+            "SHAPE"::geometry,
+            ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
+        );
+        """
+        st.write(f"Running query on table {table_name}:")
+        st.write(query)
+        df = pd.read_sql(query, conn)
+        st.write(f"Result for table {table_name}: {len(df)} rows")
+        return df
+    except Exception as e:
+        st.error(f"Query error in table {table_name}: {e}")
+        return pd.DataFrame()
+
+# Query geometries within a polygon from all tables
+def query_all_tables_within_polygon(polygon_geojson):
+    conn = get_connection()
+    if conn is None:
+        return pd.DataFrame()
+
+    # Assuming all public tables have the SHAPE column
     query = """
     SELECT table_name
     FROM information_schema.columns
     WHERE column_name = 'SHAPE' AND table_schema = 'public';
     """
     tables = pd.read_sql(query, conn)
-    return tables
+    st.write("Fetched tables with SHAPE column:")
+    st.write(tables)
 
-# Fetch data from a specific table
-def fetch_data_from_table(conn, table_name):
-    query = f"""
-    SELECT ST_AsGeoJSON("SHAPE"::geometry) as geometry
-    FROM public.{table_name}
-    WHERE "SHAPE" IS NOT NULL;
-    """
-    df = pd.read_sql(query, conn)
-    return df
-
-# Fetch data from a specific table within a drawn polygon
-def fetch_data_within_polygon(conn, table_name, polygon_geojson):
-    query = f"""
-    SELECT ST_AsGeoJSON("SHAPE"::geometry) as geometry
-    FROM public.{table_name}
-    WHERE ST_Intersects(
-        "SHAPE"::geometry,
-        ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
-    );
-    """
-    df = pd.read_sql(query, conn)
-    return df
+    all_data = []
+    for index, row in tables.iterrows():
+        table_name = row['table_name']
+        
+        # Verify the data in the table
+        if not verify_table_data(conn, table_name):
+            st.write(f"No valid data found in table {table_name}. Skipping.")
+            continue
+        
+        df = query_geometries_within_polygon(conn, table_name, polygon_geojson)
+        if not df.empty:
+            df['table_name'] = table_name
+            all_data.append(df)
+    
+    conn.close()
+    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
 # Function to add geometries to map
 def add_geometries_to_map(geojson_list, map_object):
     for geojson in geojson_list:
+        st.write(f"Adding geometry to map: {geojson}")
         if isinstance(geojson, str):
             geometry = json.loads(geojson)
         else:
-            geometry = geojson
+            geometry = geojson  # Assuming it's already a dict
+        
+        st.write(f"Parsed geometry: {geometry}")
 
         if geometry['type'] == 'Point':
             folium.Marker(location=[geometry['coordinates'][1], geometry['coordinates'][0]]).add_to(map_object)
@@ -67,52 +113,38 @@ def add_geometries_to_map(geojson_list, map_object):
             folium.PolyLine(locations=[(coord[1], coord[0]) for coord in geometry['coordinates']]).add_to(map_object)
         elif geometry['type'] == 'Polygon':
             folium.Polygon(locations=[(coord[1], coord[0]) for coord in geometry['coordinates'][0]]).add_to(map_object)
+        else:
+            st.write(f"Unsupported geometry type: {geometry['type']}")
 
-st.title('Streamlit Map Application with Supabase')
+st.title('Streamlit Map Application')
 
 # Create a Leafmap centered on Los Angeles
-m = leafmap.Map(center=[34.0522, -118.2437], zoom=10)
+m = leafmap.Map(center=[34.0522, -118.2437], zoom_start=10)
+
+# Add drawing options to the map
+draw = leafmap.DrawControl(
+    layer_name="Drawn Polygon",
+    polygon={"shapeOptions": {"color": "#0000FF"}},
+    edit={"edit": True, "remove": True}
+)
+m.add_control(draw)
 
 # Display the map using Leafmap
 st_data = m.to_streamlit(height=700)
 
-conn = get_connection()
-if conn:
-    tables = fetch_tables_with_geometry(conn)
-    st.write("Fetched tables with SHAPE column:")
-    st.write(tables)
-
-    if st.button('Fetch All Data'):
-        all_data = []
-        for _, row in tables.iterrows():
-            table_name = row['table_name']
-            df = fetch_data_from_table(conn, table_name)
+# Handle the drawn polygon
+if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
+    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
+    st.write('Polygon GeoJSON:', polygon_geojson)
+    
+    if st.button('Query Database'):
+        try:
+            df = query_all_tables_within_polygon(polygon_geojson)
             if not df.empty:
                 geojson_list = df['geometry'].tolist()
                 add_geometries_to_map(geojson_list, m)
                 st_data = m.to_streamlit(height=700)
-            all_data.append(df)
-        if all_data:
-            st.write("All data from tables has been fetched and displayed.")
-        else:
-            st.write("No data found in the tables.")
-    
-    if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
-        polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-        st.write('Polygon GeoJSON:', polygon_geojson)
-        
-        if st.button('Query Database'):
-            all_data = []
-            for _, row in tables.iterrows():
-                table_name = row['table_name']
-                df = fetch_data_within_polygon(conn, table_name, polygon_geojson)
-                if not df.empty:
-                    geojson_list = df['geometry'].tolist()
-                    add_geometries_to_map(geojson_list, m)
-                    st_data = m.to_streamlit(height=700)
-                    all_data.append(df)
-            if all_data:
-                st.write("Data within the polygon has been fetched and displayed.")
             else:
                 st.write("No geometries found within the drawn polygon.")
-    conn.close()
+        except Exception as e:
+            st.error(f"Error: {e}")
