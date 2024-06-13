@@ -38,7 +38,7 @@ def query_geometries_within_polygon(polygon_geojson):
         return pd.DataFrame()
     try:
         query = f"""
-        SELECT *, "SHAPE"::text as geometry
+        SELECT *, "SHAPE"::text as geometry, srid
         FROM public.rwmainlineonli_exportfeature
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
@@ -57,9 +57,11 @@ def query_geometries_within_polygon(polygon_geojson):
 
 # Function to add geometries to map with coordinate transformation
 def add_geometries_to_map(geojson_list, metadata_list, map_object):
-    for geojson, metadata in zip(geojson_list, metadata_list):
-        geometry = json.loads(geojson)
+    for metadata in metadata_list:
+        geojson = metadata.pop('geometry')
         srid = metadata.pop('srid')
+
+        geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
         src_crs = pyproj.CRS(f"EPSG:{srid}")
@@ -114,7 +116,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
                 st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.metadata_list = df.drop(columns=['geometry', 'srid']).to_dict(orient='records')
+                st.session_state.metadata_list = df.drop(columns=['geometry']).to_dict(orient='records')
                 
                 add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
                 st_data = st_folium(m, width=700, height=500)
