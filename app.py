@@ -16,6 +16,8 @@ if 'metadata_list' not in st.session_state:
     st.session_state.metadata_list = []
 if 'map_initialized' not in st.session_state:
     st.session_state.map_initialized = False
+if 'map' not in st.session_state:
+    st.session_state.map = None
 
 # Database connection function
 def get_connection():
@@ -108,12 +110,13 @@ def initialize_map():
     draw.add_to(m)
     return m
 
+# Initialize the map if not already done
 if not st.session_state.map_initialized:
     st.session_state.map = initialize_map()
     st.session_state.map_initialized = True
 
 # Handle the drawn polygon
-st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_map")
+st_data = st_folium(st.session_state.map, width=700, height=500, key="map")
 
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
@@ -134,5 +137,5 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
         except Exception as e:
             st.error(f"Error: {e}")
 
-# Display the map using Streamlit-Folium
-st_folium(st.session_state.map, width=700, height=500, key="final_map")
+# Display the updated map with geometries using Streamlit-Folium
+st_folium(st.session_state.map, width=700, height=500, key="map")
