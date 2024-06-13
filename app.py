@@ -4,6 +4,9 @@ import psycopg2
 import json
 import plotly.express as px
 import plotly.graph_objects as go
+from shapely.geometry import shape
+from shapely.ops import transform
+import pyproj
 
 # Database connection function
 def get_connection():
@@ -129,12 +132,15 @@ st.plotly_chart(fig, use_container_width=True)
 
 # Add drawing functionality using a hidden input to store the drawing
 st.write("Draw a polygon on the map")
-mapbox_access_token = st.secrets["mapbox_access_token"]
 st.markdown(f"""
+    <div id="map" style="height: 500px;"></div>
     <input type="hidden" id="last_active_drawing" value=''>
     <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mapbox/mapbox-gl-draw@1.2.0/dist/mapbox-gl-draw.min.js"></script>
+    <link href="https://api.tiles.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/@mapbox/mapbox-gl-draw@1.2.0/dist/mapbox-gl-draw.css" rel="stylesheet" />
     <script>
-        mapboxgl.accessToken = '{mapbox_access_token}';
+        mapboxgl.accessToken = '{st.secrets["mapbox_access_token"]}';
         var map = new mapboxgl.Map({{
             container: 'map',
             style: 'mapbox://styles/mapbox/streets-v11',
