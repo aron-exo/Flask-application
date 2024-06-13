@@ -7,6 +7,7 @@ import pyproj
 from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
+from folium.plugins import Draw
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -30,17 +31,22 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Query all geometries from the table
-@st.cache_data
-def query_all_geometries():
+# Query geometries within a polygon
+def query_geometries_within_polygon(polygon_geojson):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
     try:
-        query = """
+        query = f"""
         SELECT "SHAPE"::text as geometry, srid
         FROM public.rwmainlineonli_exportfeature
-        WHERE "SHAPE" IS NOT NULL;
+        WHERE ST_Intersects(
+            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
+            ST_SetSRID(
+                ST_GeomFromGeoJSON('{polygon_geojson}'),
+                4326
+            )
+        );
         """
         df = pd.read_sql(query, conn)
         conn.close()
@@ -80,16 +86,41 @@ st.title('Streamlit Map Application')
 # Create a Folium map centered on Los Angeles
 m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
 
-# Handle the display of all geometries
-if st.button('Display All Geometries'):
-    df = query_all_geometries()
-    if not df.empty:
-        st.session_state.geojson_list = df['geometry'].tolist()
-        st.session_state.srid_list = df['srid'].tolist()
+# Add drawing options to the map
+draw = Draw(
+    export=True,
+    filename='data.geojson',
+    position='topleft',
+    draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
+    edit_options={'edit': False}
+)
+draw.add_to(m)
+
+# Display the map using Streamlit-Folium
+st_data = st_folium(m, width=700, height=500)
+
+# Handle the drawn polygon
+if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
+    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
+    st.write('Polygon GeoJSON:', polygon_geojson)
+    
+    if st.button('Query Database'):
+        try:
+            df = query_geometries_within_polygon(polygon_geojson)
+            if not df.empty:
+                st.session_state.geojson_list = df['geometry'].tolist()
+                st.session_state.srid_list = df['srid'].tolist()
+                
+                add_geometries_to_map(st.session_state.geojson_list, st.session_state.srid_list, m)
+                st_data = st_folium(m, width=700, height=500)
+            else:
+                st.write("No geometries found within the drawn polygon.")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 # Add geometries from session state to the map
 if st.session_state.geojson_list:
     add_geometries_to_map(st.session_state.geojson_list, st.session_state.srid_list, m)
 
 # Display the map using Streamlit-Folium
-st_data = st_folium(m, width=700, height=500)
+st_folium(m, width=700, height=500)
