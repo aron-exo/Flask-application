@@ -7,6 +7,7 @@ import pyproj
 from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
+from folium.plugins import Draw
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -88,19 +89,26 @@ st.title('Streamlit Folium Map Application')
 m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
 
 # Add drawing functionality
-draw = folium.plugins.Draw(export=True)
-m.add_child(draw)
-
-# Handle the display of all geometries
-if st.button('Display All Geometries'):
-    df = query_geometries_within_polygon(polygon_geojson)
-    if not df.empty:
-        st.session_state.geojson_list = df['geometry'].tolist()
-        st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
-
-# Add geometries from session state to the map
-if st.session_state.geojson_list:
-    add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
+draw = Draw(export=True)
+draw.add_to(m)
 
 # Display the map using Streamlit-Folium
 st_data = st_folium(m, width=700, height=500)
+
+# Handle the drawn polygon
+if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
+    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
+    st.write('Polygon GeoJSON:', polygon_geojson)
+    
+    if st.button('Query Database'):
+        try:
+            df = query_geometries_within_polygon(polygon_geojson)
+            if not df.empty:
+                st.session_state.geojson_list = df['geometry'].tolist()
+                st.session_state.metadata_list = df.drop(columns=['geometry', 'SHAPE']).to_dict(orient='records')
+                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
+                st_data = st_folium(m, width=700, height=500)
+            else:
+                st.write("No geometries found within the drawn polygon.")
+        except Exception as e:
+            st.error(f"Error: {e}")
