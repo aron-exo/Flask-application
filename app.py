@@ -36,7 +36,7 @@ def fetch_tables_with_geometry(conn):
 # Verify data in a table
 def verify_table_data(conn, table_name, geom_column):
     query = f"""
-    SELECT COUNT(*), ST_SRID({geom_column}) as srid, ST_AsText({geom_column}) as geom_text
+    SELECT COUNT(*), pg_typeof({geom_column}) as geom_type, ST_SRID({geom_column}) as srid, ST_AsText({geom_column}) as geom_text
     FROM public.{table_name}
     WHERE {geom_column} IS NOT NULL
     GROUP BY {geom_column}
@@ -54,13 +54,13 @@ def query_all_geometries(conn, table_name, geom_column):
     try:
         query = f"""
         SELECT ST_AsGeoJSON({geom_column}) as geometry
-        FROM public.{table_name}
-        WHERE ST_SRID({geom_column}) = 4326;
+        FROM public.{table_name};
         """
         st.write(f"Running query on table {table_name}:")
         st.write(query)
         df = pd.read_sql(query, conn)
         st.write(f"Result for table {table_name}: {len(df)} rows")
+        st.write(df.head())  # Display the first few rows for debugging
         return df
     except Exception as e:
         st.error(f"Query error in table {table_name}: {e}")
@@ -73,6 +73,8 @@ def query_all_tables():
         return pd.DataFrame()
     
     tables = fetch_tables_with_geometry(conn)
+    st.write("Fetched tables with geometry columns:")
+    st.write(tables)
 
     all_data = []
     for index, row in tables.iterrows():
@@ -81,6 +83,7 @@ def query_all_tables():
         
         # Verify the data in the table
         if not verify_table_data(conn, table_name, geom_column):
+            st.write(f"No valid data found in table {table_name}. Skipping.")
             continue
         
         df = query_all_geometries(conn, table_name, geom_column)
