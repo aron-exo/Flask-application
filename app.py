@@ -4,7 +4,7 @@ import psycopg2
 import json
 import folium
 import pyproj
-from shapely.geometry import shape, MultiLineString
+from shapely.geometry import shape, MultiLineString, Point, LineString, Polygon
 from shapely.ops import transform
 from streamlit_folium import st_folium
 
@@ -63,7 +63,7 @@ def add_geometries_to_map(geojson_list, srid_list, map_object):
         elif transformed_geom.geom_type == 'Polygon':
             folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords]).add_to(map_object)
         elif transformed_geom.geom_type == 'MultiLineString':
-            for line in transformed_geom:
+            for line in transformed_geom.geoms:
                 folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords]).add_to(map_object)
         else:
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
