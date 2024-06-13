@@ -21,25 +21,12 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Fetch all tables and their geometry columns from the public schema
-def fetch_tables_with_geometry(conn):
-    query = """
-    SELECT f_table_schema, f_table_name, f_geometry_column
-    FROM geometry_columns
-    WHERE f_table_schema = 'public';
-    """
-    tables = pd.read_sql(query, conn)
-    st.write("Tables with geometry columns:")
-    st.write(tables)
-    return tables
-
 # Verify data in a table
-def verify_table_data(conn, table_name, geom_column):
+def verify_table_data(conn, table_name):
     query = f"""
-    SELECT COUNT(*), pg_typeof({geom_column}) as geom_type, ST_SRID({geom_column}) as srid, ST_AsText({geom_column}) as geom_text
+    SELECT COUNT(*), pg_typeof("SHAPE") as geom_type, "SHAPE"
     FROM public.{table_name}
-    WHERE {geom_column} IS NOT NULL
-    GROUP BY {geom_column}
+    WHERE "SHAPE" IS NOT NULL
     LIMIT 5;
     """
     st.write(f"Verifying data in table {table_name}:")
@@ -50,11 +37,12 @@ def verify_table_data(conn, table_name, geom_column):
     return not df.empty
 
 # Query all geometries from a specific table
-def query_all_geometries(conn, table_name, geom_column):
+def query_all_geometries(conn, table_name):
     try:
         query = f"""
-        SELECT ST_AsGeoJSON({geom_column}) as geometry
-        FROM public.{table_name};
+        SELECT "SHAPE"
+        FROM public.{table_name}
+        WHERE "SHAPE" IS NOT NULL;
         """
         st.write(f"Running query on table {table_name}:")
         st.write(query)
@@ -71,22 +59,27 @@ def query_all_tables():
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
-    
-    tables = fetch_tables_with_geometry(conn)
-    st.write("Fetched tables with geometry columns:")
+
+    # Assuming all public tables have the SHAPE column
+    query = """
+    SELECT table_name
+    FROM information_schema.columns
+    WHERE column_name = 'SHAPE' AND table_schema = 'public';
+    """
+    tables = pd.read_sql(query, conn)
+    st.write("Fetched tables with SHAPE column:")
     st.write(tables)
 
     all_data = []
     for index, row in tables.iterrows():
-        table_name = row['f_table_name']
-        geom_column = row['f_geometry_column']
+        table_name = row['table_name']
         
         # Verify the data in the table
-        if not verify_table_data(conn, table_name, geom_column):
+        if not verify_table_data(conn, table_name):
             st.write(f"No valid data found in table {table_name}. Skipping.")
             continue
         
-        df = query_all_geometries(conn, table_name, geom_column)
+        df = query_all_geometries(conn, table_name)
         if not df.empty:
             df['table_name'] = table_name
             all_data.append(df)
@@ -118,7 +111,7 @@ if st.button('Display All Geometries'):
     try:
         df = query_all_tables()
         if not df.empty:
-            geojson_list = df['geometry'].tolist()
+            geojson_list = df['SHAPE'].tolist()
             add_geometries_to_map(geojson_list, m)
             st_data = st_folium(m, width=700, height=500)
         else:
