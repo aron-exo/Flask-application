@@ -3,6 +3,8 @@ import pandas as pd
 import psycopg2
 import json
 import leafmap.foliumap as leafmap
+from streamlit_folium import st_folium
+from folium.plugins import Draw
 
 # Database connection function
 def get_connection():
@@ -25,7 +27,7 @@ def query_geometries_within_bbox(conn, min_lat, min_long, max_lat, max_long):
     try:
         query = f"""
         SELECT geometry
-        FROM geometries_in_view({min_lat}, {min_long}, {max_lat}, {max_long});
+        FROM geometries_in_bbox({min_lat}, {min_long}, {max_lat}, {max_long});
         """
         st.write(f"Running query:")
         st.write(query)
@@ -40,13 +42,8 @@ def query_geometries_within_bbox(conn, min_lat, min_long, max_lat, max_long):
 def add_geometries_to_map(geojson_list, map_object):
     for geojson in geojson_list:
         st.write(f"Adding geometry to map: {geojson}")
-        if isinstance(geojson, str):
-            geometry = json.loads(geojson)
-        else:
-            geometry = geojson  # Assuming it's already a dict
+        geometry = json.loads(geojson)
         
-        st.write(f"Parsed geometry: {geometry}")
-
         if geometry['type'] == 'Point':
             folium.Marker(location=[geometry['coordinates'][1], geometry['coordinates'][0]]).add_to(map_object)
         elif geometry['type'] == 'LineString':
@@ -83,7 +80,14 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
         try:
             conn = get_connection()
             if conn:
-                df = query_geometries_within_polygon(conn, polygon_geojson)
+                # Extract the bounding box coordinates from the polygon
+                coords = st_data['last_active_drawing']['geometry']['coordinates'][0]
+                min_long = min([point[0] for point in coords])
+                max_long = max([point[0] for point in coords])
+                min_lat = min([point[1] for point in coords])
+                max_lat = max([point[1] for point in coords])
+                
+                df = query_geometries_within_bbox(conn, min_lat, min_long, max_lat, max_long)
                 if not df.empty:
                     geojson_list = df['geometry'].tolist()
                     add_geometries_to_map(geojson_list, m)
