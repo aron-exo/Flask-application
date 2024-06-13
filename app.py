@@ -25,17 +25,19 @@ def get_connection():
         return None
 
 # Query all geometries from the table
-def query_all_geometries(conn):
+@st.cache_data
+def query_all_geometries():
+    conn = get_connection()
+    if conn is None:
+        return pd.DataFrame()
     try:
         query = """
         SELECT "SHAPE"::text as geometry, srid
         FROM public.rwmainlineonli_exportfeature
         WHERE "SHAPE" IS NOT NULL;
         """
-        st.write("Running query:")
-        st.write(query)
         df = pd.read_sql(query, conn)
-        st.write(f"Result: {len(df)} rows")
+        conn.close()
         return df
     except Exception as e:
         st.error(f"Query error: {e}")
@@ -74,19 +76,13 @@ m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
 
 # Handle the display of all geometries
 if st.button('Display All Geometries'):
-    try:
-        conn = get_connection()
-        if conn:
-            df = query_all_geometries(conn)
-            if not df.empty:
-                geojson_list = df['geometry'].tolist()
-                srid_list = df['srid'].tolist()
-                add_geometries_to_map(geojson_list, srid_list, m)
-            else:
-                st.write("No geometries found in the table.")
-            conn.close()
-    except Exception as e:
-        st.error(f"Error: {e}")
+    df = query_all_geometries()
+    if not df.empty:
+        geojson_list = df['geometry'].tolist()
+        srid_list = df['srid'].tolist()
+        add_geometries_to_map(geojson_list, srid_list, m)
+    else:
+        st.write("No geometries found in the table.")
 
 # Display the map using Streamlit-Folium
 st_data = st_folium(m, width=700, height=500)
