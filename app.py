@@ -12,8 +12,8 @@ from folium.plugins import Draw
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
     st.session_state.geojson_list = []
-if 'srid_list' not in st.session_state:
-    st.session_state.srid_list = []
+if 'metadata_list' not in st.session_state:
+    st.session_state.metadata_list = []
 
 # Database connection function
 def get_connection():
@@ -38,7 +38,7 @@ def query_geometries_within_polygon(polygon_geojson):
         return pd.DataFrame()
     try:
         query = f"""
-        SELECT "SHAPE"::text as geometry, srid
+        SELECT *, "SHAPE"::text as geometry
         FROM public.rwmainlineonli_exportfeature
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
@@ -56,9 +56,10 @@ def query_geometries_within_polygon(polygon_geojson):
         return pd.DataFrame()
 
 # Function to add geometries to map with coordinate transformation
-def add_geometries_to_map(geojson_list, srid_list, map_object):
-    for geojson, srid in zip(geojson_list, srid_list):
+def add_geometries_to_map(geojson_list, metadata_list, map_object):
+    for geojson, metadata in zip(geojson_list, metadata_list):
         geometry = json.loads(geojson)
+        srid = metadata.pop('srid')
 
         # Define the source and destination coordinate systems
         src_crs = pyproj.CRS(f"EPSG:{srid}")
@@ -68,16 +69,20 @@ def add_geometries_to_map(geojson_list, srid_list, map_object):
         # Transform the geometry to the geographic coordinate system
         shapely_geom = shape(geometry)
         transformed_geom = transform(transformer.transform, shapely_geom)
-        
+
+        # Create a popup with metadata
+        metadata_html = "<br>".join([f"<b>{key}:</b> {value}" for key, value in metadata.items()])
+        popup = folium.Popup(metadata_html, max_width=300)
+
         if transformed_geom.geom_type == 'Point':
-            folium.Marker(location=[transformed_geom.y, transformed_geom.x]).add_to(map_object)
+            folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'LineString':
-            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords]).add_to(map_object)
+            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'Polygon':
-            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords]).add_to(map_object)
+            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'MultiLineString':
             for line in transformed_geom.geoms:
-                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords]).add_to(map_object)
+                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup).add_to(map_object)
         else:
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
@@ -109,9 +114,9 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
                 st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.srid_list = df['srid'].tolist()
+                st.session_state.metadata_list = df.drop(columns=['geometry']).to_dict(orient='records')
                 
-                add_geometries_to_map(st.session_state.geojson_list, st.session_state.srid_list, m)
+                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
                 st_data = st_folium(m, width=700, height=500)
             else:
                 st.write("No geometries found within the drawn polygon.")
@@ -120,7 +125,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 
 # Add geometries from session state to the map
 if st.session_state.geojson_list:
-    add_geometries_to_map(st.session_state.geojson_list, st.session_state.srid_list, m)
+    add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
 
 # Display the map using Streamlit-Folium
 st_folium(m, width=700, height=500)
