@@ -34,15 +34,33 @@ def get_connection():
         st.error(f"Connection error: {e}")
         return None
 
-# Query geometries within a polygon
-def query_geometries_within_polygon(polygon_geojson):
+# Function to get all public tables with a SHAPE column
+def get_geometry_tables():
+    conn = get_connection()
+    if conn is None:
+        return []
+    try:
+        query = """
+        SELECT table_name
+        FROM information_schema.columns
+        WHERE column_name = 'SHAPE' AND table_schema = 'public';
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
+        return df['table_name'].tolist()
+    except Exception as e:
+        st.error(f"Error fetching table names: {e}")
+        return []
+
+# Query geometries within a polygon from a specific table
+def query_geometries_within_polygon_from_table(polygon_geojson, table_name):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
     try:
         query = f"""
         SELECT *, "SHAPE"::text as geometry, srid
-        FROM public.rwmainlineonli_exportfeature
+        FROM public.{table_name}
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
             ST_SetSRID(
@@ -55,8 +73,18 @@ def query_geometries_within_polygon(polygon_geojson):
         conn.close()
         return df
     except Exception as e:
-        st.error(f"Query error: {e}")
+        st.error(f"Query error in table {table_name}: {e}")
         return pd.DataFrame()
+
+# Query geometries within a polygon from all tables
+def query_geometries_within_polygon(polygon_geojson):
+    all_data = []
+    tables = get_geometry_tables()
+    for table in tables:
+        df = query_geometries_within_polygon_from_table(polygon_geojson, table)
+        if not df.empty:
+            all_data.append(df)
+    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
 # Function to add geometries to map with coordinate transformation
 def add_geometries_to_map(geojson_list, metadata_list, map_object):
