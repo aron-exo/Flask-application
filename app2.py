@@ -22,7 +22,13 @@ if 'table_columns' not in st.session_state:
 # Database connection function
 def get_connection():
     try:
-        conn = psycopg2.connect(st.secrets["DATABASE_URL"])
+        conn = psycopg2.connect(
+            host=st.secrets["db_host"],
+            database=st.secrets["db_name"],
+            user=st.secrets["db_user"],
+            password=st.secrets["db_password"],
+            port=st.secrets["db_port"]
+        )
         return conn
     except Exception as e:
         st.error(f"Connection error: {e}")
