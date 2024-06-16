@@ -8,6 +8,7 @@ from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
 from folium.plugins import Draw
+import tempfile
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -19,15 +20,17 @@ if 'map_initialized' not in st.session_state:
 if 'table_columns' not in st.session_state:
     st.session_state.table_columns = {}
 
-# Database connection function
+# Database connection function for CockroachDB
 def get_connection():
     try:
+        # Write the SSL certificate to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False) as tmpfile:
+            tmpfile.write(st.secrets["ssl_root_cert"].encode())
+            ssl_cert_path = tmpfile.name
+
         conn = psycopg2.connect(
-            host=st.secrets["db_host"],
-            database=st.secrets["db_name"],
-            user=st.secrets["db_user"],
-            password=st.secrets["db_password"],
-            port=st.secrets["db_port"]
+            dsn=st.secrets["database_url"],
+            sslrootcert=ssl_cert_path
         )
         return conn
     except Exception as e:
@@ -70,17 +73,42 @@ def get_table_columns(table_name):
         st.error(f"Error fetching columns for table {table_name}: {e}")
         return []
 
+# Get metadata for a specific table
+def get_metadata_for_table(table_name):
+    conn = get_connection()
+    if conn is None:
+        return None, None
+    try:
+        query = f"""
+        SELECT srid, drawing_info
+        FROM metadata
+        WHERE layer_name = '{table_name}';
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
+        if df.empty:
+            return None, None
+        return df['srid'].iloc[0], df['drawing_info'].iloc[0]
+    except Exception as e:
+        st.error(f"Error fetching metadata for table {table_name}: {e}")
+        return None, None
+
 # Query geometries within a polygon for a specific table
 def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
     try:
+        srid, drawing_info = get_metadata_for_table(table_name)
+        if srid is None:
+            st.error(f"SRID not found for table {table_name}.")
+            return pd.DataFrame()
+        
         query = f"""
-        SELECT *, "SHAPE"::text as geometry, srid
+        SELECT *, "SHAPE"::text as geometry
         FROM public.{table_name}
         WHERE ST_Intersects(
-            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
+            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), {srid}), 4326),
             ST_SetSRID(
                 ST_GeomFromGeoJSON('{polygon_geojson}'),
                 4326
@@ -92,6 +120,9 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
 
         # Ensure no duplicate columns
         df = df.loc[:, ~df.columns.duplicated()]
+
+        # Add drawing_info to each row
+        df['drawing_info'] = drawing_info
 
         return df
     except Exception as e:
@@ -119,7 +150,7 @@ def query_geometries_within_polygon(polygon_geojson):
     else:
         return pd.DataFrame()
 
-# Function to add geometries to map with coordinate transformation
+# Function to add geometries to map with coordinate transformation and styling
 def add_geometries_to_map(geojson_list, metadata_list, map_object):
     for geojson, metadata in zip(geojson_list, metadata_list):
         if 'srid' not in metadata:
@@ -127,6 +158,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 
         srid = metadata.pop('srid')
         table_name = metadata.pop('table_name')
+        drawing_info = metadata.pop('drawing_info', {})
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
@@ -146,6 +178,17 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         table_columns = st.session_state.table_columns.get(table_name, [])
         filtered_metadata = {key: value for key, value in metadata.items() if key in table_columns and pd.notna(value) and value != ''}
 
+        # Extract style information from drawing_info
+        style = {}
+        if 'renderer' in drawing_info:
+            renderer = drawing_info['renderer']
+            if 'symbol' in renderer:
+                symbol = renderer['symbol']
+                if 'color' in symbol:
+                    style['color'] = f"rgba({symbol['color'][0]},{symbol['color'][1]},{symbol['color'][2]},{symbol['color'][3] / 255})"
+                if 'outline' in symbol and 'color' in symbol['outline']:
+                    style['outline_color'] = f"rgba({symbol['outline']['color'][0]},{symbol['outline']['color'][1]},{symbol['outline']['color'][2]},{symbol['outline']['color'][3] / 255})"
+
         # Create a popup with metadata (other columns)
         metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in filtered_metadata.items()])
         popup = folium.Popup(metadata_html, max_width=300)
@@ -153,12 +196,12 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         if transformed_geom.geom_type == 'Point':
             folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'LineString':
-            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup).add_to(map_object)
+            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup, color=style.get('color')).add_to(map_object)
         elif transformed_geom.geom_type == 'Polygon':
-            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup).add_to(map_object)
+            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup, color=style.get('color'), fill_color=style.get('outline_color')).add_to(map_object)
         elif transformed_geom.geom_type == 'MultiLineString':
             for line in transformed_geom.geoms:
-                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup).add_to(map_object)
+                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup, color=style.get('color')).add_to(map_object)
         else:
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
