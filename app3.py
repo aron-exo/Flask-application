@@ -129,7 +129,8 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         srid = metadata.pop('srid')
         table_name = metadata.pop('table_name')
         drawing_info_str = metadata.pop('drawing_info', '{}')
-        drawing_info = json.loads(drawing_info_str)
+        drawing_info = json.dumps(drawing_info_str)
+        drawing_info = json.loads(drawing_info)
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
