@@ -93,6 +93,20 @@ def get_metadata_for_table(table_name):
         st.error(f"Error fetching metadata for table {table_name}: {e}")
         return None, None
 
+# Print the contents of the metadata table for debugging
+def print_metadata_table():
+    conn = get_connection()
+    if conn is None:
+        return
+    try:
+        query = "SELECT * FROM metadata;"
+        df = pd.read_sql(query, conn)
+        conn.close()
+        st.write("Contents of the metadata table:")
+        st.write(df)
+    except Exception as e:
+        st.error(f"Error fetching metadata table: {e}")
+
 # Query geometries within a polygon for a specific table
 def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
     conn = get_connection()
