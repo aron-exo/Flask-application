@@ -1,0 +1,1 @@
+ssl_root_cert = Flask-application/.streamlit/root.crt
