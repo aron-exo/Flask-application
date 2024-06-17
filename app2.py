@@ -252,9 +252,10 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
             if 'symbol' in renderer:
                 symbol = renderer['symbol']
                 if 'color' in symbol:
-                    style['color'] = f"rgba({symbol['color'][0]},{symbol['color'][1],{symbol['color'][2]},{symbol['color'][3] / 255})"
+                    style['color'] = f"rgba({symbol['color'][0]},{symbol['color'][1]},{symbol['color'][2]},{symbol['color'][3] / 255})"
                 if 'outline' in symbol and 'color' in symbol['outline']:
                     style['outline_color'] = f"rgba({symbol['outline']['color'][0]},{symbol['outline']['color'][1]},{symbol['outline']['color'][2]},{symbol['outline']['color'][3] / 255})"
+
 
         # Create a popup with metadata (other columns)
         metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in filtered_metadata.items()])
