@@ -245,7 +245,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         style = {}
         if 'renderer' in drawing_info:
             renderer = drawing_info['renderer']
-            if symbol in renderer:
+            if 'symbol' in renderer:
             symbol = renderer['symbol']
             if 'color' in symbol:
                 style['color'] = f"rgba({symbol['color'][0]},{symbol['color'][1]},{symbol['color'][2]},{symbol['color'][3] / 255})"
