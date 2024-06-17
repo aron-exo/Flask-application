@@ -82,7 +82,7 @@ def get_metadata_for_table(table_name):
         WHERE layer_name = '{table_name}';
         """
         df = pd.read_sql_query(query, conn)
-        print(df)
+        print(query)
         conn.close()
         if df.empty:
             st.write(f"No metadata found for table {table_name}")
