@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import psycopg2
 import json
 import folium
 import pyproj
@@ -7,7 +8,6 @@ from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
 from folium.plugins import Draw
-from sqlalchemy import create_engine, text
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -19,10 +19,10 @@ if 'map_initialized' not in st.session_state:
 if 'table_columns' not in st.session_state:
     st.session_state.table_columns = {}
 
-# Database connection function for CockroachDB using SQLAlchemy
-def get_engine():
+# Database connection function
+def get_connection():
     try:
-        conn = create_engine(
+        conn = psycopg2.connect(
             host=st.secrets["db_host"],
             database=st.secrets["db_name"],
             user=st.secrets["db_user"],
@@ -36,8 +36,8 @@ def get_engine():
 
 # Query all tables with a "SHAPE" column
 def get_tables_with_shape_column():
-    engine = get_engine()
-    if engine is None:
+    conn = get_connection()
+    if conn is None:
         return []
     try:
         query = """
@@ -45,7 +45,8 @@ def get_tables_with_shape_column():
         FROM information_schema.columns 
         WHERE column_name = 'SHAPE' AND table_schema = 'public';
         """
-        df = pd.read_sql(query, engine)
+        df = pd.read_sql(query, conn)
+        conn.close()
         return df['table_name'].tolist()
     except Exception as e:
         st.error(f"Error fetching table names: {e}")
@@ -53,16 +54,17 @@ def get_tables_with_shape_column():
 
 # Get column names for a specific table
 def get_table_columns(table_name):
-    engine = get_engine()
-    if engine is None:
+    conn = get_connection()
+    if conn is None:
         return []
     try:
-        query = text(f"""
+        query = f"""
         SELECT column_name 
         FROM information_schema.columns 
-        WHERE table_name = :table_name AND table_schema = 'public';
-        """)
-        df = pd.read_sql(query, engine, params={'table_name': table_name})
+        WHERE table_name = '{table_name}' AND table_schema = 'public';
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
         return df['column_name'].tolist()
     except Exception as e:
         st.error(f"Error fetching columns for table {table_name}: {e}")
@@ -70,16 +72,17 @@ def get_table_columns(table_name):
 
 # Get metadata for a specific table
 def get_metadata_for_table(table_name):
-    engine = get_engine()
-    if engine is None:
+    conn = get_connection()
+    if conn is None:
         return None, None
     try:
-        query = text(f"""
+        query = f"""
         SELECT srid, drawing_info
         FROM metadata
-        WHERE layer_name = :table_name;
-        """)
-        df = pd.read_sql(query, engine, params={'table_name': table_name})
+        WHERE layer_name = '{table_name}';
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
         if df.empty:
             st.write(f"No metadata found for table {table_name}")
             return None, None
@@ -89,23 +92,10 @@ def get_metadata_for_table(table_name):
         st.error(f"Error fetching metadata for table {table_name}: {e}")
         return None, None
 
-# Print the contents of the metadata table for debugging
-def print_metadata_table():
-    engine = get_engine()
-    if engine is None:
-        return
-    try:
-        query = "SELECT * FROM metadata;"
-        df = pd.read_sql(query, engine)
-        st.write("Contents of the metadata table:")
-        st.write(df)
-    except Exception as e:
-        st.error(f"Error fetching metadata table: {e}")
-
 # Query geometries within a polygon for a specific table
 def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
-    engine = get_engine()
-    if engine is None:
+    conn = get_connection()
+    if conn is None:
         return pd.DataFrame()
     try:
         srid, drawing_info = get_metadata_for_table(table_name)
@@ -113,18 +103,19 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
             st.error(f"SRID not found for table {table_name}.")
             return pd.DataFrame()
         
-        query = text(f"""
+        query = f"""
         SELECT *, "SHAPE"::text as geometry
         FROM public.{table_name}
         WHERE ST_Intersects(
-            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), :srid), 4326),
+            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), {srid}), 4326),
             ST_SetSRID(
-                ST_GeomFromGeoJSON(:polygon_geojson),
+                ST_GeomFromGeoJSON('{polygon_geojson}'),
                 4326
             )
         );
-        """)
-        df = pd.read_sql(query, engine, params={'srid': srid, 'polygon_geojson': polygon_geojson})
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
 
         # Ensure no duplicate columns
         df = df.loc[:, ~df.columns.duplicated()]
@@ -215,9 +206,6 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
 st.title('Streamlit Map Application')
-
-# Create a
-
 
 # Create a Folium map centered on Los Angeles if not already done
 def initialize_map():
