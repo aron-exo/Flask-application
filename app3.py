@@ -87,7 +87,7 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
             )
         );
         """
-        st.write(f"Executing query for table {table_name}: {query}")  # Debug print
+
         df = pd.read_sql(query, conn)
         conn.close()
 
