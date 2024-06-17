@@ -77,7 +77,7 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
         return pd.DataFrame()
     try:
         query = f"""
-        SELECT *, "SHAPE"::text as geometry, srid
+        SELECT *, "SHAPE"::text as geometry, srid, drawing_info
         FROM public.{table_name}
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
@@ -127,6 +127,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 
         srid = metadata.pop('srid')
         table_name = metadata.pop('table_name')
+        drawing_info = json.loads(metadata.pop('drawing_info', '{}'))
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
@@ -146,6 +147,17 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         table_columns = st.session_state.table_columns.get(table_name, [])
         filtered_metadata = {key: value for key, value in metadata.items() if key in table_columns and pd.notna(value) and value != ''}
 
+        # Extract style information from drawing_info
+        style = {}
+        if 'renderer' in drawing_info:
+            renderer = drawing_info['renderer']
+            if 'symbol' in renderer:
+                symbol = renderer['symbol']
+                if 'color' in symbol:
+                    style['color'] = f"rgba({symbol['color'][0]},{symbol['color'][1]},{symbol['color'][2]},{symbol['color'][3] / 255})"
+                if 'outline' in symbol and 'color' in symbol['outline']:
+                    style['outline_color'] = f"rgba({symbol['outline']['color'][0]},{symbol['outline']['color'][1]},{symbol['outline']['color'][2]},{symbol['outline']['color'][3] / 255})"
+
         # Create a popup with metadata (other columns)
         metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in filtered_metadata.items()])
         popup = folium.Popup(metadata_html, max_width=300)
@@ -153,12 +165,12 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         if transformed_geom.geom_type == 'Point':
             folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'LineString':
-            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup).add_to(map_object)
+            folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup, color=style.get('color')).add_to(map_object)
         elif transformed_geom.geom_type == 'Polygon':
-            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup).add_to(map_object)
+            folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup, color=style.get('color'), fill_color=style.get('outline_color')).add_to(map_object)
         elif transformed_geom.geom_type == 'MultiLineString':
             for line in transformed_geom.geoms:
-                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup).add_to(map_object)
+                folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup, color=style.get('color')).add_to(map_object)
         else:
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
