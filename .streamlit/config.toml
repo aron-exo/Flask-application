@@ -1,1 +1,1 @@
-ssl_root_cert = .streamlit/root.crt
+ssl_root_cert = ".streamlit/root.crt"
