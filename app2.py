@@ -167,7 +167,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         # Transform the geometry to the geographic coordinate system
         shapely_geom = shape(geometry)
         transformed_geom = transform(transformer.transform, shapely_geom)
-                metadata.pop('geometry', None)
+        metadata.pop('geometry', None)
         metadata.pop('SHAPE', None)
 
         # Filter metadata to include only columns from the respective table
