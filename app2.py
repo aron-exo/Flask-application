@@ -72,14 +72,32 @@ def get_layer_names_from_metadata():
 # Create a dictionary to map table names to layer names
 def create_table_to_layer_mapping(table_names, layer_names):
     mapping = {}
+    unmatched_tables = set(table_names)
+
     for table_name in table_names:
-        # Remove special characters and convert to lowercase for matching
-        sanitized_table_name = re.sub(r'\W+', '', table_name).lower()
+        # Remove special characters, replace spaces with underscores, and convert to lowercase for matching
+        sanitized_table_name = re.sub(r'\W+', '', table_name.replace('_', ' ')).lower()
         for layer_name in layer_names:
-            sanitized_layer_name = re.sub(r'\W+', '', layer_name).lower()
+            sanitized_layer_name = re.sub(r'\W+', '', layer_name.replace(' ', '_')).lower()
             if sanitized_table_name == sanitized_layer_name:
                 mapping[table_name] = layer_name
+                unmatched_tables.discard(table_name)
                 break
+
+    # For unmatched tables, attempt a more flexible match
+    for table_name in unmatched_tables:
+        best_match = None
+        best_match_score = 0
+        sanitized_table_name = re.sub(r'\W+', '', table_name.replace('_', ' ')).lower()
+        for layer_name in layer_names:
+            sanitized_layer_name = re.sub(r'\W+', '', layer_name.replace(' ', '_')).lower()
+            match_score = sum(1 for a, b in zip(sanitized_table_name, sanitized_layer_name) if a == b)
+            if match_score > best_match_score:
+                best_match = layer_name
+                best_match_score = match_score
+        if best_match:
+            mapping[table_name] = best_match
+
     return mapping
 
 # Get column names for a specific table
@@ -113,7 +131,7 @@ def get_metadata_for_table(table_name):
         query = f"""
         SELECT srid, drawing_info
         FROM metadata
-        WHERE layer_name ILIKE '%{layer_name}%';
+        WHERE layer_name = '{layer_name}';
         """
         df = pd.read_sql(query, conn)
         conn.close()
