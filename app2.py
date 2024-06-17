@@ -22,7 +22,7 @@ if 'table_columns' not in st.session_state:
 # Database connection function for CockroachDB using SQLAlchemy
 def get_engine():
     try:
-        conn = psycopg2.connect(
+        conn = create_engine(
             host=st.secrets["db_host"],
             database=st.secrets["db_name"],
             user=st.secrets["db_user"],
