@@ -73,7 +73,7 @@ def get_layer_names_from_metadata():
 def create_table_to_layer_mapping(table_names, layer_names):
     mapping = {}
     for table_name in table_names:
-        # Sanitize table name for matching
+        # Remove special characters and convert to lowercase for matching
         sanitized_table_name = re.sub(r'\W+', '', table_name).lower()
         for layer_name in layer_names:
             sanitized_layer_name = re.sub(r'\W+', '', layer_name).lower()
@@ -113,7 +113,7 @@ def get_metadata_for_table(table_name):
         query = f"""
         SELECT srid, drawing_info
         FROM metadata
-        WHERE layer_name = '{layer_name}';
+        WHERE layer_name ILIKE '%{layer_name}%';
         """
         df = pd.read_sql(query, conn)
         conn.close()
