@@ -207,6 +207,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 
 st.title('Streamlit Map Application')
 
+
 # Create a Folium map centered on Los Angeles if not already done
 def initialize_map():
     m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
