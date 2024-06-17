@@ -136,6 +136,7 @@ def query_geometries_within_polygon(polygon_geojson):
     total_tables = len(tables)
     
     for idx, table in enumerate(tables):
+        st.write(f"Querying table: {table}")
         df = query_geometries_within_polygon_for_table(table, polygon_geojson)
         if not df.empty:
             df['table_name'] = table
@@ -167,6 +168,8 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         # Transform the geometry to the geographic coordinate system
         shapely_geom = shape(geometry)
         transformed_geom = transform(transformer.transform, shapely_geom)
+
+        # Remove the 'geometry' and 'SHAPE' fields from metadata for the popup
         metadata.pop('geometry', None)
         metadata.pop('SHAPE', None)
 
@@ -244,4 +247,3 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
-
