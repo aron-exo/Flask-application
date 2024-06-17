@@ -19,14 +19,8 @@ if 'map_initialized' not in st.session_state:
     st.session_state.map_initialized = False
 if 'table_columns' not in st.session_state:
     st.session_state.table_columns = {}
-
-# Normalize table names
-def sanitize_table_name(name):
-    # Remove or replace special characters to ensure valid SQL identifiers
-    name = re.sub(r'\W+', '_', name)
-    if name[0].isdigit():
-        name = '_' + name
-    return name.lower()
+if 'table_to_layer' not in st.session_state:
+    st.session_state.table_to_layer = {}
 
 # Database connection function
 def get_connection():
@@ -61,35 +55,47 @@ def get_tables_with_shape_column():
         st.error(f"Error fetching table names: {e}")
         return []
 
-# Get column names for a specific table
-def get_table_columns(table_name):
+# Get all layer names from the metadata table
+def get_layer_names_from_metadata():
     conn = get_connection()
     if conn is None:
         return []
     try:
-        query = f"""
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = '{table_name}' AND table_schema = 'public';
-        """
+        query = "SELECT layer_name FROM metadata;"
         df = pd.read_sql(query, conn)
         conn.close()
-        return df['column_name'].tolist()
+        return df['layer_name'].tolist()
     except Exception as e:
-        st.error(f"Error fetching columns for table {table_name}: {e}")
+        st.error(f"Error fetching layer names from metadata: {e}")
         return []
 
-# Get metadata for a specific table
+# Create a dictionary to map table names to layer names
+def create_table_to_layer_mapping(table_names, layer_names):
+    mapping = {}
+    for table_name in table_names:
+        # Sanitize table name for matching
+        sanitized_table_name = re.sub(r'\W+', '', table_name).lower()
+        for layer_name in layer_names:
+            sanitized_layer_name = re.sub(r'\W+', '', layer_name).lower()
+            if sanitized_table_name == sanitized_layer_name:
+                mapping[table_name] = layer_name
+                break
+    return mapping
+
+# Get metadata for a specific table using the mapping dictionary
 def get_metadata_for_table(table_name):
     conn = get_connection()
     if conn is None:
         return None, None
     try:
-        normalized_table_name = sanitize_table_name(table_name)
+        layer_name = st.session_state.table_to_layer.get(table_name)
+        if not layer_name:
+            st.write(f"No metadata mapping found for table {table_name}")
+            return None, None
         query = f"""
         SELECT srid, drawing_info
         FROM metadata
-        WHERE layer_name = '{normalized_table_name}';
+        WHERE layer_name = '{layer_name}';
         """
         df = pd.read_sql(query, conn)
         conn.close()
@@ -129,7 +135,7 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
         
         query = f"""
         SELECT *, "SHAPE"::text as geometry
-        FROM public.{sanitize_table_name(table_name)}
+        FROM public.{table_name}
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), {srid}), 4326),
             ST_SetSRID(
@@ -156,6 +162,12 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
 def query_geometries_within_polygon(polygon_geojson):
     tables = get_tables_with_shape_column()
     all_data = []
+
+    # Get all layer names from the metadata table
+    layer_names = get_layer_names_from_metadata()
+
+    # Create a mapping from table names to layer names
+    st.session_state.table_to_layer = create_table_to_layer_mapping(tables, layer_names)
     
     progress_bar = st.progress(0)
     total_tables = len(tables)
@@ -218,7 +230,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         popup = folium.Popup(metadata_html, max_width=300)
 
         if transformed_geom.geom_type == 'Point':
-            folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
+                        folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'LineString':
             folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup, color=style.get('color')).add_to(map_object)
         elif transformed_geom.geom_type == 'Polygon':
@@ -272,3 +284,8 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
+
+# Print the metadata table for debugging
+if st.button('Print Metadata Table'):
+    print_metadata_table()
+
