@@ -19,6 +19,14 @@ if 'map_initialized' not in st.session_state:
 if 'table_columns' not in st.session_state:
     st.session_state.table_columns = {}
 
+# Normalize table names
+def sanitize_table_name(name):
+    # Remove or replace special characters to ensure valid SQL identifiers
+    name = re.sub(r'\W+', '_', name)
+    if name[0].isdigit():
+        name = '_' + name
+    return name.lower()
+
 # Database connection function
 def get_connection():
     try:
@@ -76,14 +84,13 @@ def get_metadata_for_table(table_name):
     if conn is None:
         return None, None
     try:
+        normalized_table_name = sanitize_table_name(table_name)
         query = f"""
         SELECT srid, drawing_info
         FROM metadata
-        WHERE layer_name = '{table_name}';
+        WHERE layer_name = '{normalized_table_name}';
         """
-        print(query)
-        df = pd.read_sql_query(query, conn)
-        
+        df = pd.read_sql(query, conn)
         conn.close()
         if df.empty:
             st.write(f"No metadata found for table {table_name}")
@@ -93,6 +100,20 @@ def get_metadata_for_table(table_name):
     except Exception as e:
         st.error(f"Error fetching metadata for table {table_name}: {e}")
         return None, None
+
+# Print the contents of the metadata table for debugging
+def print_metadata_table():
+    conn = get_connection()
+    if conn is None:
+        return
+    try:
+        query = "SELECT * FROM metadata;"
+        df = pd.read_sql(query, conn)
+        conn.close()
+        st.write("Contents of the metadata table:")
+        st.write(df)
+    except Exception as e:
+        st.error(f"Error fetching metadata table: {e}")
 
 # Query geometries within a polygon for a specific table
 def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
@@ -107,7 +128,7 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
         
         query = f"""
         SELECT *, "SHAPE"::text as geometry
-        FROM public.{table_name}
+        FROM public.{sanitize_table_name(table_name)}
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), {srid}), 4326),
             ST_SetSRID(
