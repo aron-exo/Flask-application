@@ -7,8 +7,6 @@ import pyproj
 from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
-from folium.plugins import Draw
-import re
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -144,8 +142,22 @@ def get_metadata_for_table(table_name):
         st.error(f"Error fetching metadata for table {table_name}: {e}")
         return None, None
 
-# Query geometries within a polygon for a specific table
-def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
+# Print the contents of the metadata table for debugging
+def print_metadata_table():
+    conn = get_connection()
+    if conn is None:
+        return
+    try:
+        query = "SELECT * FROM metadata;"
+        df = pd.read_sql(query, conn)
+        conn.close()
+        st.write("Contents of the metadata table:")
+        st.write(df)
+    except Exception as e:
+        st.error(f"Error fetching metadata table: {e}")
+
+# Query all geometries for a specific table
+def query_all_geometries_for_table(table_name):
     conn = get_connection()
     if conn is None:
         return pd.DataFrame()
@@ -157,14 +169,7 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
 
         query = f"""
         SELECT *, "SHAPE"::text as geometry
-        FROM public.{table_name}
-        WHERE ST_Intersects(
-            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), {srid}), 4326),
-            ST_SetSRID(
-                ST_GeomFromGeoJSON('{polygon_geojson}'),
-                4326
-            )
-        );
+        FROM public.{table_name};
         """
         df = pd.read_sql(query, conn)
         conn.close()
@@ -180,8 +185,8 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
         st.error(f"Query error in table {table_name}: {e}")
         return pd.DataFrame()
 
-# Query geometries within a polygon for all relevant tables
-def query_geometries_within_polygon(polygon_geojson):
+# Query all geometries for all relevant tables
+def query_all_geometries():
     tables = get_tables_with_shape_column()
     all_data = []
 
@@ -191,12 +196,16 @@ def query_geometries_within_polygon(polygon_geojson):
     # Create a mapping from table names to layer names
     st.session_state.table_to_layer = create_table_to_layer_mapping(tables, layer_names)
 
+    # Print the table to layer mapping for debugging
+    st.write("Table to Layer Mapping:")
+    st.write(st.session_state.table_to_layer)
+    
     progress_bar = st.progress(0)
     total_tables = len(tables)
     
     for idx, table in enumerate(tables):
         st.write(f"Querying table: {table}")
-        df = query_geometries_within_polygon_for_table(table, polygon_geojson)
+        df = query_all_geometries_for_table(table)
         if not df.empty:
             df['table_name'] = table
             all_data.append(df)
@@ -209,7 +218,6 @@ def query_geometries_within_polygon(polygon_geojson):
         return pd.DataFrame()
 
 # Function to add geometries to map with coordinate transformation and styling
-# Function to add geometries to map with coordinate transformation
 def add_geometries_to_map(geojson_list, metadata_list, map_object):
     for geojson, metadata in zip(geojson_list, metadata_list):
         if 'srid' not in metadata:
@@ -217,6 +225,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 
         srid = metadata.pop('srid')
         table_name = metadata.pop('table_name')
+        # drawing_info = metadata.pop('drawing_info', {})
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
@@ -257,42 +266,32 @@ st.title('Streamlit Map Application')
 # Create a Folium map centered on Los Angeles if not already done
 def initialize_map():
     m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
-    draw = Draw(
-        export=True,
-        filename='data.geojson',
-        position='topleft',
-        draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
-        edit_options={'edit': False}
-    )
-    draw.add_to(m)
     return m
 
 if not st.session_state.map_initialized:
     st.session_state.map = initialize_map()
     st.session_state.map_initialized = True
 
-# Handle the drawn polygon
-st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_map")
-
-if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
-    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-    
-    if st.button('Query Database'):
-        try:
-            df = query_geometries_within_polygon(polygon_geojson)
-            if not df.empty:
-                st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.metadata_list = df.to_dict(orient='records')
-                
-                # Clear the existing map and reinitialize it
-                m = initialize_map()
-                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
-                st.session_state.map = m
-            else:
-                st.write("No geometries found within the drawn polygon.")
-        except Exception as e:
-            st.error(f"Error: {e}")
+# Query and display all geometries from the database
+if st.button('Load All Geometries'):
+    try:
+        df = query_all_geometries()
+        if not df.empty:
+            st.session_state.geojson_list = df['geometry'].tolist()
+            st.session_state.metadata_list = df.to_dict(orient='records')
+            
+            # Clear the existing map and reinitialize it
+            m = initialize_map()
+            add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
+            st.session_state.map = m
+        else:
+            st.write("No geometries found.")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
 
+# Print the metadata table for debugging
+if st.button('Print Metadata Table'):
+    print_metadata_table()
