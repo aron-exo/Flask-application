@@ -133,6 +133,7 @@ def get_metadata_for_table(table_name):
     try:
         layer_name = st.session_state.table_to_layer.get(table_name)
         if not layer_name:
+            st.write(f"No metadata mapping found for table {table_name}")
             return None, None
         query = f"""
         SELECT srid, drawing_info
@@ -141,6 +142,7 @@ def get_metadata_for_table(table_name):
         """
         df = pd.read_sql(query, conn)
         if df.empty:
+            st.write(f"No metadata found for table {table_name}")
             return None, None
         return df['srid'].iloc[0], df['drawing_info'].iloc[0]
     except Exception as e:
@@ -157,6 +159,7 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
     try:
         srid, drawing_info = get_metadata_for_table(table_name)
         if srid is None:
+            st.error(f"SRID not found for table {table_name}.")
             return pd.DataFrame()
         
         query = f"""
@@ -170,10 +173,16 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
             )
         );
         """
+        st.write(f"Executing query for table {table_name}: {query}")  # Debug statement
         df = pd.read_sql(query, conn)
 
         df = df.loc[:, ~df.columns.duplicated()]
         df['drawing_info'] = drawing_info
+
+        if df.empty:
+            st.write(f"No intersections found for table {table_name}.")  # Debug statement
+        else:
+            st.write(f"Intersections found for table {table_name}: {df.shape[0]} rows.")  # Debug statement
 
         return df
     except Exception as e:
