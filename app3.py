@@ -129,8 +129,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         srid = metadata.pop('srid')
         table_name = metadata.pop('table_name')
         drawing_info_str = metadata.pop('drawing_info', '{}')
-        drawing_info = json.dumps(drawing_info_str)
-        drawing_info = json.loads(drawing_info)
+        drawing_info = json.loads(drawing_info_str)
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
@@ -219,4 +218,4 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             st.error(f"Error: {e}")
 
 # Display the map using Streamlit-Folium
-st_folium(st.session_state.map, width=700, height=500, key="map")
+st_folium(st.session_state.map, width=700, height=500, key
