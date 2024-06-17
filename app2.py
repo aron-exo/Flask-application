@@ -82,6 +82,24 @@ def create_table_to_layer_mapping(table_names, layer_names):
                 break
     return mapping
 
+# Get column names for a specific table
+def get_table_columns(table_name):
+    conn = get_connection()
+    if conn is None:
+        return []
+    try:
+        query = f"""
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = '{table_name}' AND table_schema = 'public';
+        """
+        df = pd.read_sql(query, conn)
+        conn.close()
+        return df['column_name'].tolist()
+    except Exception as e:
+        st.error(f"Error fetching columns for table {table_name}: {e}")
+        return []
+
 # Get metadata for a specific table using the mapping dictionary
 def get_metadata_for_table(table_name):
     conn = get_connection()
@@ -168,6 +186,10 @@ def query_geometries_within_polygon(polygon_geojson):
 
     # Create a mapping from table names to layer names
     st.session_state.table_to_layer = create_table_to_layer_mapping(tables, layer_names)
+
+    # Print the table to layer mapping for debugging
+    st.write("Table to Layer Mapping:")
+    st.write(st.session_state.table_to_layer)
     
     progress_bar = st.progress(0)
     total_tables = len(tables)
@@ -223,14 +245,14 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
                 if 'color' in symbol:
                     style['color'] = f"rgba({symbol['color'][0]},{symbol['color'][1]},{symbol['color'][2]},{symbol['color'][3] / 255})"
                 if 'outline' in symbol and 'color' in symbol['outline']:
-                    style['outline_color'] = f"rgba({symbol['outline']['color'][0]},{symbol['outline']['color'][1]},{symbol['outline']['color'][2]},{symbol['outline']['color'][3] / 255})"
+                                        style['outline_color'] = f"rgba({symbol['outline']['color'][0]},{symbol['outline']['color'][1]},{symbol['outline']['color'][2]},{symbol['outline']['color'][3] / 255})"
 
         # Create a popup with metadata (other columns)
         metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in filtered_metadata.items()])
         popup = folium.Popup(metadata_html, max_width=300)
 
         if transformed_geom.geom_type == 'Point':
-                        folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
+            folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'LineString':
             folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup, color=style.get('color')).add_to(map_object)
         elif transformed_geom.geom_type == 'Polygon':
