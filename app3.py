@@ -77,7 +77,7 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
         return pd.DataFrame()
     try:
         query = f"""
-        SELECT *, "SHAPE"::text as geometry, srid, drawing_info
+        SELECT *, "SHAPE"::text as geometry, srid, drawing_info::text as drawing_info
         FROM public.{table_name}
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
