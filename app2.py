@@ -9,7 +9,6 @@ from shapely.ops import transform
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 import re
-import time
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -23,25 +22,20 @@ if 'table_columns' not in st.session_state:
 if 'table_to_layer' not in st.session_state:
     st.session_state.table_to_layer = {}
 
-# Database connection function with retry logic
+# Database connection function
 def get_connection():
-    retries = 3
-    for i in range(retries):
-        try:
-            conn = psycopg2.connect(
-                host=st.secrets["db_host"],
-                database=st.secrets["db_name"],
-                user=st.secrets["db_user"],
-                password=st.secrets["db_password"],
-                port=st.secrets["db_port"]
-            )
-            return conn
-        except Exception as e:
-            if i < retries - 1:
-                time.sleep(2)  # wait before retrying
-            else:
-                st.error(f"Connection error after {retries} attempts: {e}")
-                return None
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["db_host"],
+            database=st.secrets["db_name"],
+            user=st.secrets["db_user"],
+            password=st.secrets["db_password"],
+            port=st.secrets["db_port"]
+        )
+        return conn
+    except Exception as e:
+        st.error(f"Connection error: {e}")
+        return None
 
 # Query all tables with a "SHAPE" column
 def get_tables_with_shape_column():
@@ -55,12 +49,11 @@ def get_tables_with_shape_column():
         WHERE column_name = 'SHAPE' AND table_schema = 'public';
         """
         df = pd.read_sql(query, conn)
+        conn.close()
         return df['table_name'].tolist()
     except Exception as e:
         st.error(f"Error fetching table names: {e}")
         return []
-    finally:
-        conn.close()
 
 # Get all layer names from the metadata table
 def get_layer_names_from_metadata():
@@ -70,12 +63,11 @@ def get_layer_names_from_metadata():
     try:
         query = "SELECT layer_name FROM metadata;"
         df = pd.read_sql(query, conn)
+        conn.close()
         return df['layer_name'].tolist()
     except Exception as e:
         st.error(f"Error fetching layer names from metadata: {e}")
         return []
-    finally:
-        conn.close()
 
 # Create a dictionary to map table names to layer names
 def create_table_to_layer_mapping(table_names, layer_names):
@@ -83,6 +75,7 @@ def create_table_to_layer_mapping(table_names, layer_names):
     unmatched_tables = set(table_names)
 
     for table_name in table_names:
+        # Remove special characters, replace spaces with underscores, and convert to lowercase for matching
         sanitized_table_name = re.sub(r'\W+', '', table_name.replace('_', ' ')).lower()
         for layer_name in layer_names:
             sanitized_layer_name = re.sub(r'\W+', '', layer_name.replace(' ', '_')).lower()
@@ -91,6 +84,7 @@ def create_table_to_layer_mapping(table_names, layer_names):
                 unmatched_tables.discard(table_name)
                 break
 
+    # For unmatched tables, attempt a more flexible match
     for table_name in unmatched_tables:
         best_match = None
         best_match_score = 0
@@ -118,12 +112,11 @@ def get_table_columns(table_name):
         WHERE table_name = '{table_name}' AND table_schema = 'public';
         """
         df = pd.read_sql(query, conn)
+        conn.close()
         return df['column_name'].tolist()
     except Exception as e:
         st.error(f"Error fetching columns for table {table_name}: {e}")
         return []
-    finally:
-        conn.close()
 
 # Get metadata for a specific table using the mapping dictionary
 def get_metadata_for_table(table_name):
@@ -141,15 +134,15 @@ def get_metadata_for_table(table_name):
         WHERE layer_name = '{layer_name}';
         """
         df = pd.read_sql(query, conn)
+        conn.close()
         if df.empty:
             st.write(f"No metadata found for table {table_name}")
             return None, None
+        st.write(f"Metadata for table {table_name}: {df}")
         return df['srid'].iloc[0], df['drawing_info'].iloc[0]
     except Exception as e:
         st.error(f"Error fetching metadata for table {table_name}: {e}")
         return None, None
-    finally:
-        conn.close()
 
 # Query geometries within a polygon for a specific table
 def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
@@ -175,28 +168,33 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
         """
         st.write(f"Executing query for table {table_name}: {query}")  # Debug statement
         df = pd.read_sql(query, conn)
-
-        df = df.loc[:, ~df.columns.duplicated()]
-        df['drawing_info'] = drawing_info
+        conn.close()
 
         if df.empty:
-            st.write(f"No intersections found for table {table_name}.")  # Debug statement
+            st.write(f"No intersections found for table {table_name}.")
         else:
-            st.write(f"Intersections found for table {table_name}: {df.shape[0]} rows.")  # Debug statement
+            st.write(f"Intersections found for table {table_name}: {len(df)} rows.")
+        
+        # Ensure no duplicate columns
+        df = df.loc[:, ~df.columns.duplicated()]
+
+        # Add drawing_info to each row
+        df['drawing_info'] = drawing_info
 
         return df
     except Exception as e:
         st.error(f"Query error in table {table_name}: {e}")
         return pd.DataFrame()
-    finally:
-        conn.close()
 
 # Query geometries within a polygon for all relevant tables
 def query_geometries_within_polygon(polygon_geojson):
     tables = get_tables_with_shape_column()
     all_data = []
 
+    # Get all layer names from the metadata table
     layer_names = get_layer_names_from_metadata()
+
+    # Create a mapping from table names to layer names
     st.session_state.table_to_layer = create_table_to_layer_mapping(tables, layer_names)
     
     progress_bar = st.progress(0)
@@ -226,48 +224,46 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         drawing_info = metadata.pop('drawing_info', {})
         geometry = json.loads(geojson)
 
+        # Define the source and destination coordinate systems
         src_crs = pyproj.CRS(f"EPSG:{srid}")
         dst_crs = pyproj.CRS("EPSG:4326")
         transformer = pyproj.Transformer.from_crs(src_crs, dst_crs, always_xy=True)
 
+        # Transform the geometry to the geographic coordinate system
         shapely_geom = shape(geometry)
         transformed_geom = transform(transformer.transform, shapely_geom)
 
+        # Remove the 'geometry' and 'SHAPE' fields from metadata for the popup
         metadata.pop('geometry', None)
         metadata.pop('SHAPE', None)
 
+        # Filter metadata to include only columns from the respective table
         table_columns = st.session_state.table_columns.get(table_name, [])
         filtered_metadata = {key: value for key, value in metadata.items() if key in table_columns and pd.notna(value) and value != ''}
 
-        st.write(f"Adding geometry to map for table {table_name}: {transformed_geom.geom_type}")  # Debug statement
-
+        # Extract style information from drawing_info
         style = {}
         if 'renderer' in drawing_info:
             renderer = drawing_info['renderer']
-            if 'symbol' in renderer:
-                symbol = renderer['symbol']
-                if 'color' in symbol:
-                    style['color'] = f"rgba({symbol['color'][0]},{symbol['color'][1]},{symbol['color'][2]},{symbol['color'][3] / 255})"
-                if 'outline' in symbol and 'color' in symbol['outline']:
-                    style['outline_color'] = f"rgba({symbol['outline']['color'][0]},{symbol['outline']['color'][1]},{symbol['outline']['color'][2]},{symbol['outline']['color'][3] / 255})"
+            if symbol in renderer:
+            symbol = renderer['symbol']
+            if 'color' in symbol:
+                style['color'] = f"rgba({symbol['color'][0]},{symbol['color'][1]},{symbol['color'][2]},{symbol['color'][3] / 255})"
+            if 'outline' in symbol and 'color' in symbol['outline']:
+                style['outline_color'] = f"rgba({symbol['outline']['color'][0]},{symbol['outline']['color'][1]},{symbol['outline']['color'][2]},{symbol['outline']['color'][3] / 255})"
 
         # Create a popup with metadata (other columns)
         metadata_html = f"<b>Table: {table_name}</b><br>" + "<br>".join([f"<b>{key}:</b> {value}" for key, value in filtered_metadata.items()])
         popup = folium.Popup(metadata_html, max_width=300)
 
         if transformed_geom.geom_type == 'Point':
-            st.write(f"Adding Point: {[transformed_geom.y, transformed_geom.x]}")  # Debug statement
             folium.Marker(location=[transformed_geom.y, transformed_geom.x], popup=popup).add_to(map_object)
         elif transformed_geom.geom_type == 'LineString':
-            st.write(f"Adding LineString: {[(coord[1], coord[0]) for coord in transformed_geom.coords]}")  # Debug statement
             folium.PolyLine(locations=[(coord[1], coord[0]) for coord in transformed_geom.coords], popup=popup, color=style.get('color')).add_to(map_object)
         elif transformed_geom.geom_type == 'Polygon':
-            st.write(f"Adding Polygon: {[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords]}")  # Debug statement
             folium.Polygon(locations=[(coord[1], coord[0]) for coord in transformed_geom.exterior.coords], popup=popup, color=style.get('color'), fill_color=style.get('outline_color')).add_to(map_object)
         elif transformed_geom.geom_type == 'MultiLineString':
-            st.write(f"Adding MultiLineString")  # Debug statement
             for line in transformed_geom.geoms:
-                st.write(f"Adding LineString in MultiLineString: {[(coord[1], coord[0]) for coord in line.coords]}")  # Debug statement
                 folium.PolyLine(locations=[(coord[1], coord[0]) for coord in line.coords], popup=popup, color=style.get('color')).add_to(map_object)
         else:
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
