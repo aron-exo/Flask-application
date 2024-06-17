@@ -82,6 +82,7 @@ def get_metadata_for_table(table_name):
         FROM metadata
         WHERE layer_name = '{table_name}';
         """
+        print(query)
         df = pd.read_sql(query, conn)
         conn.close()
         if df.empty:
