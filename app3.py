@@ -218,4 +218,4 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
             st.error(f"Error: {e}")
 
 # Display the map using Streamlit-Folium
-st_folium(st.session_state.map, width=700, height=500, key
+st_folium(st.session_state.map, width=700, height=500, key)
