@@ -85,7 +85,9 @@ def get_metadata_for_table(table_name):
         df = pd.read_sql(query, conn)
         conn.close()
         if df.empty:
+            st.write(f"No metadata found for table {table_name}")
             return None, None
+        st.write(f"Metadata for table {table_name}: {df}")
         return df['srid'].iloc[0], df['drawing_info'].iloc[0]
     except Exception as e:
         st.error(f"Error fetching metadata for table {table_name}: {e}")
