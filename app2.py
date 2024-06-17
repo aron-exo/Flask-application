@@ -23,8 +23,6 @@ if 'table_columns' not in st.session_state:
 # Database connection function for CockroachDB
 def get_connection():
     try:
-
-
         conn = psycopg2.connect(
             host=st.secrets["db_host"],
             database=st.secrets["db_name"],
@@ -169,9 +167,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         # Transform the geometry to the geographic coordinate system
         shapely_geom = shape(geometry)
         transformed_geom = transform(transformer.transform, shapely_geom)
-
-        # Remove the 'geometry' and 'SHAPE' fields from metadata for the popup
-        metadata.pop('geometry', None)
+                metadata.pop('geometry', None)
         metadata.pop('SHAPE', None)
 
         # Filter metadata to include only columns from the respective table
@@ -206,7 +202,6 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
 st.title('Streamlit Map Application')
-
 
 # Create a Folium map centered on Los Angeles if not already done
 def initialize_map():
@@ -249,3 +244,4 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
+
