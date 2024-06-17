@@ -23,14 +23,14 @@ if 'table_columns' not in st.session_state:
 # Database connection function for CockroachDB
 def get_connection():
     try:
-        # Write the SSL certificate to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False) as tmpfile:
-            tmpfile.write(st.secrets["ssl_root_cert"].encode())
-            ssl_cert_path = tmpfile.name
+
 
         conn = psycopg2.connect(
-            dsn=st.secrets["database_url"],
-            sslrootcert=ssl_cert_path
+            host=st.secrets["db_host"],
+            database=st.secrets["db_name"],
+            user=st.secrets["db_user"],
+            password=st.secrets["db_password"],
+            port=st.secrets["db_port"]
         )
         return conn
     except Exception as e:
