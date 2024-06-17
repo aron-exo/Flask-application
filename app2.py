@@ -141,20 +141,6 @@ def get_metadata_for_table(table_name):
         st.error(f"Error fetching metadata for table {table_name}: {e}")
         return None, None
 
-# Print the contents of the metadata table for debugging
-def print_metadata_table():
-    conn = get_connection()
-    if conn is None:
-        return
-    try:
-        query = "SELECT * FROM metadata;"
-        df = pd.read_sql(query, conn)
-        conn.close()
-        st.write("Contents of the metadata table:")
-        st.write(df)
-    except Exception as e:
-        st.error(f"Error fetching metadata table: {e}")
-
 # Query geometries within a polygon for a specific table
 def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
     conn = get_connection()
@@ -316,8 +302,3 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
-
-# Print the metadata table for debugging
-if st.button('Print Metadata Table'):
-    print_metadata_table()
-
