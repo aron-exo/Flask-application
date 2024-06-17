@@ -213,55 +213,47 @@ def query_geometries_within_polygon(polygon_geojson):
 
 # Function to query all geometries
 def query_all_geometries():
-    tables = get_tables_with_shape_column()
-    all_data = []
-
-    # Get all layer names from the metadata table
-    layer_names = get_layer_names_from_metadata()
-
-    # Create a mapping from table names to layer names
-    st.session_state.table_to_layer = create_table_to_layer_mapping(tables, layer_names)
-
-    progress_bar = st.progress(0)
-    total_tables = len(tables)
-
-    for idx, table in enumerate(tables):
-        st.write(f"Querying table: {table}")
-        conn = get_connection()
-        if conn is None:
-            continue
-        try:
+    conn = get_connection()
+    if conn is None:
+        return pd.DataFrame()
+    try:
+        all_data = []
+        tables = get_tables_with_shape_column()
+        progress_bar = st.progress(0)
+        total_tables = len(tables)
+        
+        for idx, table in enumerate(tables):
             srid, drawing_info = get_metadata_for_table(table)
             if srid is None:
-                st.error(f"SRID not found for table {table}.")
+                st.write(f"SRID not found for table {table}.")
                 continue
             
             query = f"""
             SELECT *, "SHAPE"::text as geometry
             FROM public.{table}
-            WHERE ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), {srid}), 4326) IS NOT NULL;
+            WHERE "SHAPE" IS NOT NULL;
             """
+            st.write(f"Executing query for table {table}: {query}")
             df = pd.read_sql(query, conn)
-            conn.close()
-
-            # Ensure no duplicate columns
-            df = df.loc[:, ~df.columns.duplicated()]
-
-            # Add drawing_info to each row
-            df['drawing_info'] = drawing_info
-
+            
             if not df.empty:
                 df['table_name'] = table
+                df['srid'] = srid
+                df['drawing_info'] = drawing_info
                 all_data.append(df)
-                st.session_state.table_columns[table] = get_table_columns(table)
-        except Exception as e:
-            st.error(f"Query error in table {table}: {e}")
-            continue
-        progress_bar.progress((idx + 1) / total_tables)
-            if all_data:
-        return pd.concat(all_data, ignore_index=True)
-    else:
+            
+            progress_bar.progress((idx + 1) / total_tables)
+        
+        conn.close()
+        
+        if all_data:
+            return pd.concat(all_data, ignore_index=True)
+        else:
+            return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error querying all geometries: {e}")
         return pd.DataFrame()
+
 
 # Function to add geometries to map with coordinate transformation and styling
 def add_geometries_to_map(geojson_list, metadata_list, map_object):
