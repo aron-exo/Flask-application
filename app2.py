@@ -7,6 +7,7 @@ import pyproj
 from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
+import re
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
