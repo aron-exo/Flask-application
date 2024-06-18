@@ -218,5 +218,52 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
         except Exception as e:
             st.error(f"Error: {e}")
 
+# Function to create ArcGIS webmap
+def create_arcgis_webmap(geojson_list, metadata_list):
+    gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
+
+    webmap_dict = {
+        "title": "Webmap with Intersected Geometries",
+        "type": "Web Map",
+        "text": json.dumps({
+            "operationalLayers": [],
+            "baseMap": {
+                "baseMapLayers": [
+                    {
+                        "id": "defaultBasemap",
+                        "layerType": "ArcGISTiledMapServiceLayer",
+                        "url": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
+                    }
+                ],
+                "title": "World Imagery"
+            },
+            "version": "2.13"
+        })
+    }
+
+    webmap_item = gis.content.add(webmap_dict)
+
+    for geojson, metadata in zip(geojson_list, metadata_list):
+        geometry = json.loads(geojson)
+        feature = {
+            "geometry": geometry,
+            "attributes": {key: value for key, value in metadata.items() if key != 'geometry'}
+        }
+        feature_set = FeatureSet([feature])
+        feature_layer = FeatureLayer.from_featureset(feature_set)
+        feature_layer_item = gis.content.add({"title": f"Layer from {metadata['table_name']}"}, feature_layer)
+        webmap_item.add_layer(feature_layer_item)
+
+    webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
+    st.success(f"Webmap created successfully! [View Webmap]({webmap_url})")
+
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
+
+if st.button('Create ArcGIS Webmap'):
+    if st.session_state.geojson_list and st.session_state.metadata_list:
+        create_arcgis_webmap(st.session_state.geojson_list, st.session_state.metadata_list)
+    else:
+        st.error("No geometries available to create a webmap.")
+
+
