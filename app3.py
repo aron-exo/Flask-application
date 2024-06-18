@@ -183,7 +183,7 @@ st.title('Streamlit Map Application')
 def initialize_map():
     m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
     draw = Draw(
-        export=True,
+        export=False,
         filename='data.geojson',
         position='topleft',
         draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
