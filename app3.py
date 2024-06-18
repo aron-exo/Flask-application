@@ -41,8 +41,8 @@ def get_tables_with_shape_column():
         return []
     try:
         query = """
-        SELECT table_name 
-        FROM information_schema.columns 
+        SELECT table_name
+        FROM information_schema.columns
         WHERE column_name = 'SHAPE' AND table_schema = 'public';
         """
         df = pd.read_sql(query, conn)
@@ -59,8 +59,8 @@ def get_table_columns(table_name):
         return []
     try:
         query = f"""
-        SELECT column_name 
-        FROM information_schema.columns 
+        SELECT column_name
+        FROM information_schema.columns
         WHERE table_name = '{table_name}' AND table_schema = 'public';
         """
         df = pd.read_sql(query, conn)
@@ -77,18 +77,36 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
         return pd.DataFrame()
     try:
         query = f"""
-        SELECT *, 
-               ST_AsGeoJSON(ST_Intersection(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326), 
-               ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326))) as geometry, 
-               srid, drawing_info::text as drawing_info
+        SELECT *, "SHAPE"::text as geometry, srid, drawing_info::text as drawing_info
+        FROM public.{table_name}
+        WHERE ST_Intersects(
+            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
+            ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
+        );
         """
-
         df = pd.read_sql(query, conn)
         conn.close()
 
         # Ensure no duplicate columns
         df = df.loc[:, ~df.columns.duplicated()]
 
+        # Add intersection geometry
+        intersection_query = f"""
+        SELECT ST_AsGeoJSON(
+            ST_Intersection(
+                ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
+                ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
+            )
+        ) as intersection_geom
+        FROM public.{table_name}
+        WHERE ST_Intersects(
+            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
+            ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326)
+        );
+        """
+        intersection_df = pd.read_sql(intersection_query, conn)
+        df['intersection_geom'] = intersection_df['intersection_geom']
+        
         return df
     except Exception as e:
         st.error(f"Query error in table {table_name}: {e}")
@@ -98,10 +116,10 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
 def query_geometries_within_polygon(polygon_geojson):
     tables = get_tables_with_shape_column()
     all_data = []
-    
+
     progress_bar = st.progress(0)
     total_tables = len(tables)
-    
+
     for idx, table in enumerate(tables):
         df = query_geometries_within_polygon_for_table(table, polygon_geojson)
         if not df.empty:
@@ -172,9 +190,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         else:
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
-st.title('Streamlit Map Application')
-
-# Create a Folium map centered on Los Angeles if not already done
+# Initialize and display the map
 def initialize_map():
     m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
     draw = Draw(
@@ -187,6 +203,8 @@ def initialize_map():
     draw.add_to(m)
     return m
 
+st.title('Streamlit Map Application')
+
 if not st.session_state.map_initialized:
     st.session_state.map = initialize_map()
     st.session_state.map_initialized = True
@@ -197,15 +215,20 @@ st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_ma
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
     
+    # Add the drawn polygon to the map
+    drawn_polygon = json.loads(polygon_geojson)
+    folium.GeoJson(drawn_polygon, name="Drawn Polygon", style_function=lambda x: {'fillColor': '#00000000', 'color': '#0000FF'}).add_to(st.session_state.map)
+
     if st.button('Query Database'):
         try:
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
-                st.session_state.geojson_list = df['geometry'].tolist()
+                st.session_state.geojson_list = df['intersection_geom'].tolist()
                 st.session_state.metadata_list = df.to_dict(orient='records')
                 
                 # Clear the existing map and reinitialize it
                 m = initialize_map()
+                folium.GeoJson(drawn_polygon, name="Drawn Polygon", style_function=lambda x: {'fillColor': '#00000000', 'color': '#0000FF'}).add_to(m)
                 add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
                 st.session_state.map = m
             else:
