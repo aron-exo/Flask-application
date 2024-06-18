@@ -77,7 +77,10 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
         return pd.DataFrame()
     try:
         query = f"""
-        SELECT *, "SHAPE"::text as geometry, srid, drawing_info::text as drawing_info
+        SELECT *, 
+               ST_AsGeoJSON(ST_Intersection(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326), 
+               ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326))) as geometry, 
+               srid, drawing_info::text as drawing_info
         FROM public.{table_name}
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
@@ -206,17 +209,4 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
         try:
             df = query_geometries_within_polygon(polygon_geojson)
             if not df.empty:
-                st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.metadata_list = df.to_dict(orient='records')
-                
-                # Clear the existing map and reinitialize it
-                m = initialize_map()
-                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
-                st.session_state.map = m
-            else:
-                st.write("No geometries found within the drawn polygon.")
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-# Display the map using Streamlit-Folium
-st_folium(st.session_state.map, width=700, height=500, key="map")
+                st.session_state.geo
