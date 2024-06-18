@@ -202,25 +202,24 @@ if not st.session_state.map_initialized:
 # Handle the drawn polygon
 st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_map")
 
-if st.session_state.polygon_geojson and st.button('Query Database'):
-    try:
-        df = query_geometries_within_polygon(st.session_state.polygon_geojson)
-        if not df.empty:
-            st.session_state.geojson_list = df['geometry'].tolist()
-            st.session_state.metadata_list = df.to_dict(orient='records')
-            
-            # Clear the existing map and reinitialize it
-            m = initialize_map()
-            
-            if st.session_state.show_polygon:
-                folium.GeoJson(json.loads(st.session_state.polygon_geojson), name="Drawn Polygon").add_to(m)
-            
-            add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
-            st.session_state.map = m
-        else:
-            st.write("No geometries found within the drawn polygon.")
-    except Exception as e:
-        st.error(f"Error: {e}")
+if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
+    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
+    
+    if st.button('Query Database'):
+        try:
+            df = query_geometries_within_polygon(polygon_geojson)
+            if not df.empty:
+                st.session_state.geojson_list = df['geometry'].tolist()
+                st.session_state.metadata_list = df.to_dict(orient='records')
+                
+                # Clear the existing map and reinitialize it
+                m = initialize_map()
+                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
+                st.session_state.map = m
+            else:
+                st.write("No geometries found within the drawn polygon.")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
