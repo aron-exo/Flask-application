@@ -7,4 +7,4 @@ python-dotenv
 pyproj
 shapely
 plotly
-SQLAlchemy
+arcgis
