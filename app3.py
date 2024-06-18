@@ -8,6 +8,8 @@ from shapely.geometry import shape
 from shapely.ops import transform
 from streamlit_folium import st_folium
 from folium.plugins import Draw
+from arcgis.gis import GIS
+from arcgis.features import FeatureLayer, FeatureSet
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
