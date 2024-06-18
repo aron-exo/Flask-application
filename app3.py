@@ -248,16 +248,18 @@ def create_arcgis_webmap(geojson_list, metadata_list):
 
     webmap_item = gis.content.add(webmap_dict)
 
+    features = []
     for geojson, metadata in zip(geojson_list, metadata_list):
         geometry = json.loads(geojson)
-        feature = {
-            "geometry": geometry,
-            "attributes": {key: value for key, value in metadata.items() if key != 'geometry'}
-        }
-        feature_set = FeatureSet([feature])
-        feature_layer_collection = FeatureLayerCollection.from_featureset(feature_set, gis)
-        feature_layer_item = gis.content.add({"title": f"Layer from {metadata['table_name']}"}, feature_layer_collection)
-        webmap_item.add_layer(feature_layer_item)
+        attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
+        feature = {"geometry": geometry, "attributes": attributes}
+        features.append(feature)
+
+    feature_set = FeatureSet(features)
+    feature_collection = FeatureCollection.from_featureset(feature_set)
+    feature_collection_item = gis.content.add({"title": "Intersected Features"}, feature_collection)
+
+    webmap_item.add_layer(feature_collection_item)
 
     webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
     st.success(f"Webmap created successfully! [View Webmap]({webmap_url})")
