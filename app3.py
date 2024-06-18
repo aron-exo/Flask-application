@@ -81,14 +81,6 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
                ST_AsGeoJSON(ST_Intersection(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326), 
                ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326))) as geometry, 
                srid, drawing_info::text as drawing_info
-        FROM public.{table_name}
-        WHERE ST_Intersects(
-            ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
-            ST_SetSRID(
-                ST_GeomFromGeoJSON('{polygon_geojson}'),
-                4326
-            )
-        );
         """
 
         df = pd.read_sql(query, conn)
