@@ -9,7 +9,7 @@ from shapely.ops import transform
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 from arcgis.gis import GIS
-from arcgis.features import FeatureSet, FeatureLayerCollection
+from arcgis.features import FeatureLayer, FeatureSet,FeatureLayerCollection
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -20,10 +20,6 @@ if 'map_initialized' not in st.session_state:
     st.session_state.map_initialized = False
 if 'table_columns' not in st.session_state:
     st.session_state.table_columns = {}
-if 'polygon_geojson' not in st.session_state:
-    st.session_state.polygon_geojson = None
-if 'show_polygon' not in st.session_state:
-    st.session_state.show_polygon = True
 
 # Database connection function
 def get_connection():
@@ -83,10 +79,7 @@ def query_geometries_within_polygon_for_table(table_name, polygon_geojson):
         return pd.DataFrame()
     try:
         query = f"""
-        SELECT *, 
-               ST_AsGeoJSON(ST_Intersection(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326), 
-               ST_SetSRID(ST_GeomFromGeoJSON('{polygon_geojson}'), 4326))) as geometry, 
-               srid, drawing_info::text as drawing_info
+        SELECT *, "SHAPE"::text as geometry, srid, drawing_info::text as drawing_info
         FROM public.{table_name}
         WHERE ST_Intersects(
             ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON("SHAPE"::json), srid), 4326),
@@ -192,7 +185,8 @@ st.title('Streamlit Map Application')
 def initialize_map():
     m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
     draw = Draw(
-        export=False,  # Set export to False to prevent "export" text from appearing
+        export=False,
+        filename='data.geojson',
         position='topleft',
         draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
         edit_options={'edit': False}
@@ -208,36 +202,23 @@ if not st.session_state.map_initialized:
 st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_map")
 
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
-    st.session_state.polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-
-if st.session_state.polygon_geojson:
-    # Add checkbox to toggle the polygon
-    st.session_state.show_polygon = st.checkbox("Show Polygon", value=st.session_state.show_polygon)
-
-    if st.session_state.show_polygon:
-        # Add the drawn polygon to the map
-        polygon = json.loads(st.session_state.polygon_geojson)
-        folium.GeoJson(polygon, name="Drawn Polygon").add_to(st.session_state.map)
-
-if st.session_state.polygon_geojson and st.button('Query Database'):
-    try:
-        df = query_geometries_within_polygon(st.session_state.polygon_geojson)
-        if not df.empty:
-            st.session_state.geojson_list = df['geometry'].tolist()
-            st.session_state.metadata_list = df.to_dict(orient='records')
-            
-            # Clear the existing map and reinitialize it
-            m = initialize_map()
-            
-            if st.session_state.show_polygon:
-                folium.GeoJson(json.loads(st.session_state.polygon_geojson), name="Drawn Polygon").add_to(m)
-            
-            add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
-            st.session_state.map = m
-        else:
-            st.write("No geometries found within the drawn polygon.")
-    except Exception as e:
-        st.error(f"Error: {e}")
+    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
+    
+    if st.button('Query Database'):
+        try:
+            df = query_geometries_within_polygon(polygon_geojson)
+            if not df.empty:
+                st.session_state.geojson_list = df['geometry'].tolist()
+                st.session_state.metadata_list = df.to_dict(orient='records')
+                
+                # Clear the existing map and reinitialize it
+                m = initialize_map()
+                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
+                st.session_state.map = m
+            else:
+                st.write("No geometries found within the drawn polygon.")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
