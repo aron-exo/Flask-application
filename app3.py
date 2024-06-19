@@ -9,7 +9,7 @@ from shapely.ops import transform
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 from arcgis.gis import GIS
-from arcgis.features import FeatureLayerCollection, Feature
+from arcgis.features import GeoAccessor, GeoSeriesAccessor
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -267,23 +267,17 @@ def create_arcgis_webmap(geojson_list, metadata_list):
 
     webmap_item = gis.content.add(webmap_dict)
 
+    # Create a DataFrame from the geojson_list and metadata_list
     features = []
     for geojson, metadata in zip(geojson_list, metadata_list):
         geometry = json.loads(geojson)
         attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
-        feature = Feature(geometry=geometry, attributes=attributes)
-        features.append(feature)
+        features.append({**attributes, 'geometry': geometry})
 
-    feature_set = FeatureSet(features)
+    df = pd.DataFrame(features)
+    spatial_df = pd.DataFrame.spatial.from_df(df)
 
-    # Use the correct method to create a feature layer collection
-    layer_definition = {
-        "geometryType": "esriGeometryPolygon",
-        "fields": [{"name": k, "type": "esriFieldTypeString"} for k in metadata_list[0].keys() if k != 'geometry']
-    }
-
-    feature_layer_collection = FeatureLayerCollection.from_featureset(feature_set, layer_definition, gis)
-    feature_layer_item = gis.content.add({"title": "Intersected Features"}, feature_layer_collection)
+    feature_layer_item = spatial_df.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
     webmap_item.add_layer(feature_layer_item)
 
