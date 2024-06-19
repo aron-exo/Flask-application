@@ -206,7 +206,7 @@ def create_arcgis_webmap(df):
     df['geometry'] = df.apply(lambda row: format_geometry(row['SHAPE'], row['srid']) if pd.notna(row['SHAPE']) else None, axis=1)
     
     # Debugging: Check DataFrame before conversion
-    st.write(df.head())
+    st.write(df)
 
     # Convert to spatially enabled DataFrame
     sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
