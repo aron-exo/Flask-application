@@ -210,7 +210,7 @@ def create_arcgis_webmap(df):
 
     # Convert to spatially enabled DataFrame
     sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry2')
-    st.write(pd.DataFrame.spatial.from_df(df, geometry_column='geometry2').head())
+    st.write(df['geometry2'])
     # Debugging: Check spatially enabled DataFrame
     st.write(df.spatial.validate())
     w.add_layer(df)
