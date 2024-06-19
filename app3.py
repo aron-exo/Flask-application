@@ -179,53 +179,6 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         else:
             st.write(f"Unsupported geometry type: {transformed_geom.geom_type}")
 
-st.title('Streamlit Map Application')
-
-# Create a Folium map centered on Los Angeles if not already done
-def initialize_map():
-    m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
-    draw = Draw(
-        export=False,
-        filename='data.geojson',
-        position='topleft',
-        draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
-        edit_options={'edit': False}
-    )
-    draw.add_to(m)
-    return m
-
-if not st.session_state.map_initialized:
-    st.session_state.map = initialize_map()
-    st.session_state.map_initialized = True
-
-# Handle the drawn polygon
-st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_map")
-
-if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
-    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-    #st.write(polygon_geojson)
-    if st.button('Query Database'):
-        try:
-            df = query_geometries_within_polygon(polygon_geojson)
-            #st.write(df)
-            create_arcgis_webmap(df)
-            if not df.empty:
-                st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.metadata_list = df.to_dict(orient='records')
-                
-                # Clear the existing map and reinitialize it
-                m = initialize_map()
-                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
-                st.session_state.map = m
-            else:
-                st.write("No geometries found within the drawn polygon.")
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-# Display the map using Streamlit-Folium
-st_folium(st.session_state.map, width=700, height=500, key="map")
-
-
 # Function to create ArcGIS webmap
 def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
@@ -289,6 +242,55 @@ def create_arcgis_webmap(df):
 
     webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
     st.success(f"Webmap created successfully! [View Webmap]({webmap_url})")
+
+st.title('Streamlit Map Application')
+
+# Create a Folium map centered on Los Angeles if not already done
+def initialize_map():
+    m = folium.Map(location=[34.0522, -118.2437], zoom_start=10)
+    draw = Draw(
+        export=False,
+        filename='data.geojson',
+        position='topleft',
+        draw_options={'polyline': False, 'rectangle': False, 'circle': False, 'marker': False, 'circlemarker': False},
+        edit_options={'edit': False}
+    )
+    draw.add_to(m)
+    return m
+
+if not st.session_state.map_initialized:
+    st.session_state.map = initialize_map()
+    st.session_state.map_initialized = True
+
+# Handle the drawn polygon
+st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_map")
+
+if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
+    polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
+    #st.write(polygon_geojson)
+    if st.button('Query Database'):
+        try:
+            df = query_geometries_within_polygon(polygon_geojson)
+            #st.write(df)
+            create_arcgis_webmap(df)
+            if not df.empty:
+                st.session_state.geojson_list = df['geometry'].tolist()
+                st.session_state.metadata_list = df.to_dict(orient='records')
+                
+                # Clear the existing map and reinitialize it
+                m = initialize_map()
+                add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
+                st.session_state.map = m
+            else:
+                st.write("No geometries found within the drawn polygon.")
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+# Display the map using Streamlit-Folium
+st_folium(st.session_state.map, width=700, height=500, key="map")
+
+
+
 
 if st.button('Create ArcGIS Webmap'):
     if st.session_state.geojson_list and st.session_state.metadata_list:
