@@ -224,7 +224,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 st_folium(st.session_state.map, width=700, height=500, key="map")
 
 
-
+print(df)
 # Function to create ArcGIS webmap
 def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
