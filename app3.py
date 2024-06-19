@@ -243,7 +243,7 @@ if st.session_state.polygon_geojson and st.button('Query Database'):
 st_folium(st.session_state.map, width=700, height=500, key="map")
 
 # Function to create ArcGIS webmap
-def create_arcgis_webmap(geojson_list, metadata_list):
+def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
 
     webmap_dict = {
@@ -267,14 +267,7 @@ def create_arcgis_webmap(geojson_list, metadata_list):
 
     webmap_item = gis.content.add(webmap_dict)
 
-    # Create a DataFrame from the geojson_list and metadata_list
-    features = []
-    for geojson, metadata in zip(geojson_list, metadata_list):
-        geometry = json.loads(geojson)
-        attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
-        features.append({**attributes, 'geometry': geometry})
-
-    df = pd.DataFrame(features)
+    # Ensure the DataFrame is spatially enabled
     spatial_df = pd.DataFrame.spatial.from_df(df)
 
     feature_layer_item = spatial_df.spatial.to_featurelayer(title="Intersected Features", gis=gis)
@@ -286,6 +279,14 @@ def create_arcgis_webmap(geojson_list, metadata_list):
 
 if st.button('Create ArcGIS Webmap'):
     if st.session_state.geojson_list and st.session_state.metadata_list:
-        create_arcgis_webmap(st.session_state.geojson_list, st.session_state.metadata_list)
+        # Create a DataFrame from the geojson_list and metadata_list
+        features = []
+        for geojson, metadata in zip(st.session_state.geojson_list, st.session_state.metadata_list):
+            geometry = json.loads(geojson)
+            attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
+            features.append({**attributes, 'geometry': geometry})
+
+        df = pd.DataFrame(features)
+        create_arcgis_webmap(df)
     else:
         st.error("No geometries available to create a webmap.")
