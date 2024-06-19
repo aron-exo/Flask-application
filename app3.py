@@ -304,8 +304,8 @@ if st.button('Create ArcGIS Webmap'):
        # df = pd.DataFrame(features)
         
         # Debugging: Check DataFrame columns and head
-        st.write(df.columns)
-        st.write(df.head())
+        st.write(st.session_state.df.columns)
+        st.write(st.session_state.df.head())
         
         create_arcgis_webmap(st.session_state.df)
     else:
