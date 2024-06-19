@@ -236,12 +236,12 @@ def create_arcgis_webmap(df):
     # Debugging: Check spatially enabled DataFrame
     st.write(sdf.spatial.validate())
 
-    feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
+    #feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
-    webmap_item.add_layer(feature_layer_item)
-
-    webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
-    st.success(f"Webmap created successfully! [View Webmap]({webmap_url})")
+    webmap_item.add_layer(sdf)
+    webmap_item.save()
+    #webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
+    st.success(f"Webmap created successfully!")
 
 st.title('Streamlit Map Application')
 
