@@ -4,7 +4,7 @@ import psycopg2
 import json
 import folium
 import pyproj
-from shapely.geometry import shape
+from shapely.geometry import shape, mapping
 from shapely.ops import transform
 from streamlit_folium import st_folium
 from folium.plugins import Draw
@@ -269,9 +269,9 @@ def create_arcgis_webmap(df):
 
     # Ensure the DataFrame is spatially enabled
     df['geometry'] = df['geometry'].apply(shape)
-    spatial_df = pd.DataFrame.spatial.from_geodataframe(df)
+    df = GeoAccessor.from_geodataframe(df)
 
-    feature_layer_item = spatial_df.spatial.to_featurelayer(title="Intersected Features", gis=gis)
+    feature_layer_item = df.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
     webmap_item.add_layer(feature_layer_item)
 
@@ -285,7 +285,7 @@ if st.button('Create ArcGIS Webmap'):
         for geojson, metadata in zip(st.session_state.geojson_list, st.session_state.metadata_list):
             geometry = json.loads(geojson)
             attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
-            features.append({**attributes, 'geometry': geometry})
+            features.append({**attributes, 'geometry': mapping(shape(geometry))})
 
         df = pd.DataFrame(features)
         create_arcgis_webmap(df)
