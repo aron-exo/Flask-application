@@ -232,16 +232,16 @@ def create_arcgis_webmap(df):
     st.write(df.head())
 
     # Convert to spatially enabled DataFrame
-    sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry2')
+    st.session_state.sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry2')
 
     # Debugging: Check spatially enabled DataFrame
-    st.write(sdf.spatial.validate())
-    w.add_layer(sdf)
+    st.write(st.session_state.sdf.spatial.validate())
+    w.add_layer(st.session_state.sdf)
     w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'})    
     #feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
-    webmap_item.add_layer(sdf)
-    webmap_item.save()
+    #webmap_item.add_layer(sdf)
+    #webmap_item.save()
     #webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
     st.success(f"Webmap created successfully!")
 
