@@ -225,6 +225,7 @@ st_folium(st.session_state.map, width=700, height=500, key="map")
 
 
 
+# Function to create ArcGIS webmap
 def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
 
@@ -295,11 +296,15 @@ if st.button('Create ArcGIS Webmap'):
         for geojson, metadata in zip(st.session_state.geojson_list, st.session_state.metadata_list):
             geometry = json.loads(geojson)
             attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
-            features.append({**attributes, 'geometry': json.dumps(geometry)})
+            features.append({**attributes, 'geometry': json.dumps(geometry), 'srid': metadata['srid']})
 
         df = pd.DataFrame(features)
+        
+        # Debugging: Check DataFrame columns and head
+        st.write(df.columns)
+        st.write(df.head())
+        
         create_arcgis_webmap(df)
     else:
         st.error("No geometries available to create a webmap.")
-
 
