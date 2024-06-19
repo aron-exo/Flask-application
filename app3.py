@@ -203,7 +203,7 @@ st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_ma
 
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-    
+    print(polygon_geojson)
     if st.button('Query Database'):
         try:
             df = query_geometries_within_polygon(polygon_geojson)
