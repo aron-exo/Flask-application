@@ -204,7 +204,20 @@ def create_arcgis_webmap(df):
 
     # Apply format_geometry to the 'geometry' column
     df['geometry'] = df.apply(lambda row: format_geometry(row['SHAPE'], row['srid']) if pd.notna(row['SHAPE']) else None, axis=1)
+    @st.cache_data
+    def convert_df(df):
+       return df.to_csv(index=False).encode('utf-8')
     
+    
+    csv = convert_df(df)
+    
+    st.download_button(
+       "Press to Download",
+       csv,
+       "file.csv",
+       "text/csv",
+       key='download-csv'
+    )
     # Debugging: Check DataFrame before conversion
     st.write(df.head())
 
