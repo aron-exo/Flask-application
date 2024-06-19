@@ -203,14 +203,14 @@ def create_arcgis_webmap(df):
 
 
     # Apply format_geometry to the 'geometry' column
-    df['geometryx2'] = df.apply(lambda row: format_geometry(row['SHAPE'], row['srid']) if pd.notna(row['SHAPE']) else None, axis=1)
+    df['geometry'] = df.apply(lambda row: format_geometry(row['SHAPE'], row['srid']) if pd.notna(row['SHAPE']) else None, axis=1)
     
     # Debugging: Check DataFrame before conversion
     st.write(df.head())
 
     # Convert to spatially enabled DataFrame
-    sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometryx2')
-    st.write(df['geometryx2'])
+    sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
+    st.write(df['geometry'])
     # Debugging: Check spatially enabled DataFrame
     st.write(df.spatial.validate())
     w.add_layer(df)
