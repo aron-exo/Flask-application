@@ -220,12 +220,12 @@ def create_arcgis_webmap(df):
             return geom
 
     # Ensure 'geometry' and 'srid' columns exist
-    if 'geometry' not in df.columns or 'srid' not in df.columns:
-        st.error("The DataFrame must contain 'geometry' and 'srid' columns.")
-        return
+    #if 'geometry' not in df.columns or 'srid' not in df.columns:
+        #st.error("The DataFrame must contain 'geometry' and 'srid' columns.")
+        #return
 
     # Apply format_geometry to the 'geometry' column
-    df['geometry'] = df.apply(lambda row: format_geometry(row['geometry'], row['srid']) if pd.notna(row['geometry']) else None, axis=1)
+    #df['geometry'] = df.apply(lambda row: format_geometry(row['geometry'], row['srid']) if pd.notna(row['geometry']) else None, axis=1)
     
     # Debugging: Check DataFrame before conversion
     st.write(df.head())
