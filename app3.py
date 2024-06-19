@@ -223,6 +223,8 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
 
+
+
 def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
 
@@ -264,10 +266,12 @@ def create_arcgis_webmap(df):
     df['geometry'] = df['geometry'].apply(lambda geom: format_geometry(geom) if geom else None)
     sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
 
-    #feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
+    feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
-    webmap_item.add_layer(sdf)
+    # Add the feature layer to the webmap
+    webmap_item.add_layer(feature_layer_item)
 
+    # Generate and display the webmap URL
     webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
     st.success(f"Webmap created successfully! [View Webmap]({webmap_url})")
 
