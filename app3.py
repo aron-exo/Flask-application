@@ -184,26 +184,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
 
-    webmap_dict = {
-        "title": "Webmap with Intersected Geometries",
-        "type": "Web Map",
-        "text": json.dumps({
-            "operationalLayers": [],
-            "baseMap": {
-                "baseMapLayers": [
-                    {
-                        "id": "defaultBasemap",
-                        "layerType": "ArcGISTiledMapServiceLayer",
-                        "url": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
-                    }
-                ],
-                "title": "World Imagery"
-            },
-            "version": "2.13"
-        })
-    }
-
-    #webmap_item = gis.content.add(webmap_dict)
+    
     w = WebMap()
     # Ensure the DataFrame is spatially enabled
     def format_geometry(geom, srid):
@@ -220,10 +201,6 @@ def create_arcgis_webmap(df):
         else:
             return geom
 
-    # Ensure 'geometry' and 'srid' columns exist
-    #if 'geometry' not in df.columns or 'srid' not in df.columns:
-        #st.error("The DataFrame must contain 'geometry' and 'srid' columns.")
-        #return
 
     # Apply format_geometry to the 'geometry' column
     df['geometry2'] = df.apply(lambda row: format_geometry(row['SHAPE'], row['srid']) if pd.notna(row['SHAPE']) else None, axis=1)
@@ -233,7 +210,7 @@ def create_arcgis_webmap(df):
 
     # Convert to spatially enabled DataFrame
     sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry2')
-    st.write(sdf.head())
+    st.write(pd.DataFrame.spatial.from_df(df, geometry_column='geometry2').head())
     # Debugging: Check spatially enabled DataFrame
     st.write(sdf.spatial.validate())
     w.add_layer(sdf)
