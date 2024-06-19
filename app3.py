@@ -224,7 +224,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 st_folium(st.session_state.map, width=700, height=500, key="map")
 
 # Function to create ArcGIS webmap
-def create_arcgis_webmap(geojson_list, metadata_list):
+def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
 
     webmap_dict = {
@@ -248,24 +248,27 @@ def create_arcgis_webmap(geojson_list, metadata_list):
 
     webmap_item = gis.content.add(webmap_dict)
 
-    features = []
-    for geojson, metadata in zip(geojson_list, metadata_list):
-        geometry = json.loads(geojson)
-        attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
-        feature = {"geometry": geometry, "attributes": attributes}
-        features.append(feature)
+    # Ensure the DataFrame is spatially enabled
+    df['geometry'] = df['geometry'].apply(shape)
+    sdf = GeoAccessor.from_df(df, geometry_column='geometry')
 
-    feature_set = FeatureSet(features)
-    feature_collection = FeatureCollection.from_featureset(feature_set)
-    feature_collection_item = gis.content.add({"title": "Intersected Features"}, feature_collection)
+    feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
-    webmap_item.add_layer(feature_collection_item)
+    webmap_item.add_layer(feature_layer_item)
 
     webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
     st.success(f"Webmap created successfully! [View Webmap]({webmap_url})")
 
 if st.button('Create ArcGIS Webmap'):
     if st.session_state.geojson_list and st.session_state.metadata_list:
-        create_arcgis_webmap(st.session_state.geojson_list, st.session_state.metadata_list)
+        # Create a DataFrame from the geojson_list and metadata_list
+        features = []
+        for geojson, metadata in zip(st.session_state.geojson_list, st.session_state.metadata_list):
+            geometry = json.loads(geojson)
+            attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
+            features.append({**attributes, 'geometry': mapping(shape(geometry))})
+
+        df = pd.DataFrame(features)
+        create_arcgis_webmap(df)
     else:
         st.error("No geometries available to create a webmap.")
