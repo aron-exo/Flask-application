@@ -259,11 +259,27 @@ def create_arcgis_webmap(df):
             return {"spatialReference": {"wkid": srid}, "paths": [geom['coordinates']]}
         elif geom['type'] == 'Polygon':
             return {"spatialReference": {"wkid": srid}, "rings": geom['coordinates']}
+        elif geom['type'] == 'MultiLineString':
+            return {"spatialReference": {"wkid": srid}, "paths": geom['coordinates']}
         else:
             return geom
 
-    df['geometry'] = df.apply(lambda row: format_geometry(row['geometry'], row['srid']) if row['geometry'] else None, axis=1)
+    # Ensure 'geometry' and 'srid' columns exist
+    if 'geometry' not in df.columns or 'srid' not in df.columns:
+        st.error("The DataFrame must contain 'geometry' and 'srid' columns.")
+        return
+
+    # Apply format_geometry to the 'geometry' column
+    df['geometry'] = df.apply(lambda row: format_geometry(row['geometry'], row['srid']) if pd.notna(row['geometry']) else None, axis=1)
+    
+    # Debugging: Check DataFrame before conversion
+    st.write(df.head())
+
+    # Convert to spatially enabled DataFrame
     sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
+
+    # Debugging: Check spatially enabled DataFrame
+    st.write(sdf.spatial.validate())
 
     feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
@@ -285,4 +301,5 @@ if st.button('Create ArcGIS Webmap'):
         create_arcgis_webmap(df)
     else:
         st.error("No geometries available to create a webmap.")
+
 
