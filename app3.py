@@ -203,11 +203,12 @@ st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_ma
 
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-    st.write(polygon_geojson)
+    #st.write(polygon_geojson)
     if st.button('Query Database'):
         try:
             df = query_geometries_within_polygon(polygon_geojson)
-            st.write(df)
+            #st.write(df)
+            create_arcgis_webmap(df)
             if not df.empty:
                 st.session_state.geojson_list = df['geometry'].tolist()
                 st.session_state.metadata_list = df.to_dict(orient='records')
@@ -224,8 +225,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
 
-df = query_geometries_within_polygon(polygon_geojson)
-st.write(df)
+
 # Function to create ArcGIS webmap
 def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
