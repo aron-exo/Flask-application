@@ -249,8 +249,9 @@ def create_arcgis_webmap(df):
     webmap_item = gis.content.add(webmap_dict)
 
     # Ensure the DataFrame is spatially enabled
-    df['geometry'] = df['geometry'].apply(shape)
-    sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
+    df['geometry'] = df['geometry'].apply(lambda geom: shape(geom) if geom else None)
+    sdf = pd.DataFrame(df)
+    sdf.spatial.set_geometry('geometry')
 
     feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
