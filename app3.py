@@ -10,6 +10,7 @@ from streamlit_folium import st_folium
 from folium.plugins import Draw
 from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureSet,FeatureLayerCollection
+from arcgis.mapping import WebMap
 
 # Initialize session state for geometries if not already done
 if 'geojson_list' not in st.session_state:
@@ -202,8 +203,8 @@ def create_arcgis_webmap(df):
         })
     }
 
-    webmap_item = gis.content.add(webmap_dict)
-
+    #webmap_item = gis.content.add(webmap_dict)
+    w = WebMap()
     # Ensure the DataFrame is spatially enabled
     def format_geometry(geom, srid):
         if isinstance(geom, str):
@@ -235,7 +236,8 @@ def create_arcgis_webmap(df):
 
     # Debugging: Check spatially enabled DataFrame
     st.write(sdf.spatial.validate())
-
+    w.add_layer(sdf)
+    w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'})    
     #feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
     webmap_item.add_layer(sdf)
