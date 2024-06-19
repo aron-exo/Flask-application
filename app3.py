@@ -250,28 +250,25 @@ def create_arcgis_webmap(df):
     webmap_item = gis.content.add(webmap_dict)
 
     # Ensure the DataFrame is spatially enabled
-    def format_geometry(geom):
+    def format_geometry(geom, srid):
         if isinstance(geom, str):
             geom = json.loads(geom)
         if geom['type'] == 'Point':
-            return {"spatialReference": {"wkid": 4326}, "x": geom['coordinates'][0], "y": geom['coordinates'][1]}
+            return {"spatialReference": {"wkid": srid}, "x": geom['coordinates'][0], "y": geom['coordinates'][1]}
         elif geom['type'] == 'LineString':
-            return {"spatialReference": {"wkid": 4326}, "paths": [geom['coordinates']]}
+            return {"spatialReference": {"wkid": srid}, "paths": [geom['coordinates']]}
         elif geom['type'] == 'Polygon':
-            return {"spatialReference": {"wkid": 4326}, "rings": geom['coordinates']}
-        # Add handling for MultiLineString, MultiPolygon if needed
+            return {"spatialReference": {"wkid": srid}, "rings": geom['coordinates']}
         else:
             return geom
 
-    df['geometry'] = df['geometry'].apply(lambda geom: format_geometry(geom) if geom else None)
+    df['geometry'] = df.apply(lambda row: format_geometry(row['geometry'], row['srid']) if row['geometry'] else None, axis=1)
     sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
 
     feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
-    # Add the feature layer to the webmap
     webmap_item.add_layer(feature_layer_item)
 
-    # Generate and display the webmap URL
     webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
     st.success(f"Webmap created successfully! [View Webmap]({webmap_url})")
 
