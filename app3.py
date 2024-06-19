@@ -22,8 +22,6 @@ if 'table_columns' not in st.session_state:
     st.session_state.table_columns = {}
 if 'polygon_geojson' not in st.session_state:
     st.session_state.polygon_geojson = None
-if 'show_polygon' not in st.session_state:
-    st.session_state.show_polygon = True
 
 # Database connection function
 def get_connection():
@@ -210,14 +208,7 @@ st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_ma
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     st.session_state.polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
 
-if st.session_state.polygon_geojson:
-    # Add checkbox to toggle the polygon
-    st.session_state.show_polygon = st.checkbox("Show Polygon", value=st.session_state.show_polygon)
 
-    if st.session_state.show_polygon:
-        # Add the drawn polygon to the map
-        polygon = json.loads(st.session_state.polygon_geojson)
-        folium.GeoJson(polygon, name="Drawn Polygon").add_to(st.session_state.map)
 
 if st.session_state.polygon_geojson and st.button('Query Database'):
     try:
@@ -229,8 +220,6 @@ if st.session_state.polygon_geojson and st.button('Query Database'):
             # Clear the existing map and reinitialize it
             m = initialize_map()
             
-            if st.session_state.show_polygon:
-                folium.GeoJson(json.loads(st.session_state.polygon_geojson), name="Drawn Polygon").add_to(m)
             
             add_geometries_to_map(st.session_state.geojson_list, st.session_state.metadata_list, m)
             st.session_state.map = m
