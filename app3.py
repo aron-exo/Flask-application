@@ -223,7 +223,6 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
 
-# Function to create ArcGIS webmap
 def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
 
@@ -247,9 +246,11 @@ def create_arcgis_webmap(df):
     }
 
     webmap_item = gis.content.add(webmap_dict)
+
     # Ensure the DataFrame is spatially enabled
     def format_geometry(geom):
-        geom = json.loads(geom)
+        if isinstance(geom, str):
+            geom = json.loads(geom)
         if geom['type'] == 'Point':
             return {"spatialReference": {"wkid": 4326}, "x": geom['coordinates'][0], "y": geom['coordinates'][1]}
         elif geom['type'] == 'LineString':
@@ -260,10 +261,9 @@ def create_arcgis_webmap(df):
         else:
             return geom
 
-    df['geometry'] = df['geometry'].apply(format_geometry)
-
+    df['geometry'] = df['geometry'].apply(lambda geom: format_geometry(geom) if geom else None)
     sdf = pd.DataFrame(df)
-    sdf.spatial.set_geometry('geometry')
+    GeoAccessor.from_df(sdf, geometry_column='geometry')
 
     feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
@@ -279,9 +279,10 @@ if st.button('Create ArcGIS Webmap'):
         for geojson, metadata in zip(st.session_state.geojson_list, st.session_state.metadata_list):
             geometry = json.loads(geojson)
             attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
-            features.append({**attributes, 'geometry': mapping(shape(geometry))})
+            features.append({**attributes, 'geometry': json.dumps(geometry)})
 
         df = pd.DataFrame(features)
         create_arcgis_webmap(df)
     else:
         st.error("No geometries available to create a webmap.")
+
