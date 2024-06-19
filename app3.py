@@ -247,9 +247,21 @@ def create_arcgis_webmap(df):
     }
 
     webmap_item = gis.content.add(webmap_dict)
-
     # Ensure the DataFrame is spatially enabled
-    df['geometry'] = df['geometry'].apply(lambda geom: shape(geom) if geom else None)
+    def format_geometry(geom):
+        geom = json.loads(geom)
+        if geom['type'] == 'Point':
+            return {"spatialReference": {"wkid": 4326}, "x": geom['coordinates'][0], "y": geom['coordinates'][1]}
+        elif geom['type'] == 'LineString':
+            return {"spatialReference": {"wkid": 4326}, "paths": [geom['coordinates']]}
+        elif geom['type'] == 'Polygon':
+            return {"spatialReference": {"wkid": 4326}, "rings": geom['coordinates']}
+        # Add handling for MultiLineString, MultiPolygon if needed
+        else:
+            return geom
+
+    df['geometry'] = df['geometry'].apply(format_geometry)
+
     sdf = pd.DataFrame(df)
     sdf.spatial.set_geometry('geometry')
 
