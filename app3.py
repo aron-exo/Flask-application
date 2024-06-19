@@ -291,7 +291,7 @@ st_folium(st.session_state.map, width=700, height=500, key="map")
 
 
 st.write(st.session_state.polygon_geojson)
-
+st.write(st.session_state.df)
 if st.button('Create ArcGIS Webmap'):
     if st.session_state.geojson_list and st.session_state.metadata_list:
         # Create a DataFrame from the geojson_list and metadata_list
