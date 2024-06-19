@@ -270,7 +270,7 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
     #st.write(polygon_geojson)
     if st.button('Query Database'):
         try:
-            df = query_geometries_within_polygon(st.session_state.polygon_geojson)
+            st.session_state.df = query_geometries_within_polygon(st.session_state.polygon_geojson)
             #st.write(df)
             #create_arcgis_webmap(df)
             if not df.empty:
@@ -307,7 +307,7 @@ if st.button('Create ArcGIS Webmap'):
         st.write(df.columns)
         st.write(df.head())
         
-        create_arcgis_webmap(df)
+        create_arcgis_webmap(st.session_state.df)
     else:
         st.error("No geometries available to create a webmap.")
 
