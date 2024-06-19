@@ -290,15 +290,15 @@ def create_arcgis_webmap(df):
     st.success(f"Webmap created successfully! [View Webmap]({webmap_url})")
 
 if st.button('Create ArcGIS Webmap'):
-    if st.session_state.geojson_list and st.session_state.metadata_list:
+   # if st.session_state.geojson_list and st.session_state.metadata_list:
         # Create a DataFrame from the geojson_list and metadata_list
-        features = []
-        for geojson, metadata in zip(st.session_state.geojson_list, st.session_state.metadata_list):
-            geometry = json.loads(geojson)
-            attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
-            features.append({**attributes, 'geometry': json.dumps(geometry), 'srid': metadata['srid']})
+        #features = []
+        #for geojson, metadata in zip(st.session_state.geojson_list, st.session_state.metadata_list):
+          #  geometry = json.loads(geojson)
+          #  attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
+           # features.append({**attributes, 'geometry': json.dumps(geometry), 'srid': metadata['srid']})
 
-        df = pd.DataFrame(features)
+       # df = pd.DataFrame(features)
         
         # Debugging: Check DataFrame columns and head
         st.write(df.columns)
