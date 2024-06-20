@@ -208,6 +208,7 @@ def create_arcgis_webmap(df):
 
     @st.cache_data
     def convert_df(df):
+        st.write(df.head())
         return df.to_csv(index=False).encode('utf-8')
 
     csv = convert_df(df)
