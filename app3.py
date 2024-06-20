@@ -206,9 +206,6 @@ def create_arcgis_webmap(df):
     df['geometry'] = df.apply(lambda row: format_geometry(row['SHAPE'], row['srid']) if pd.notna(row['SHAPE']) else None, axis=1)
     @st.cache_data
     def convert_df(df):
-       sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
-       w.add_layer(df)
-       w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'}) 
        return df.to_csv(index=False).encode('utf-8')
     
     
@@ -221,6 +218,10 @@ def create_arcgis_webmap(df):
        "text/csv",
        key='download-csv'
     )
+
+    sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
+    w.add_layer(df)
+    w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'}) 
     # Debugging: Check DataFrame before conversion
     st.write(df.head())
 
