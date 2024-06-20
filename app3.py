@@ -208,7 +208,9 @@ def create_arcgis_webmap(df):
 
     @st.cache_data
     def convert_df(df):
+        sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
         st.write(df.head())
+        st.write(sdf.head())
         return df.to_csv(index=False).encode('utf-8')
 
     csv = convert_df(df)
