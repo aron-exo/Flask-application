@@ -9,7 +9,7 @@ from shapely.ops import transform
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 from arcgis.gis import GIS
-from arcgis.features import FeatureLayer, FeatureSet,FeatureLayerCollection
+from arcgis.features import FeatureLayer, FeatureSet, FeatureLayerCollection
 from arcgis.mapping import WebMap
 
 # Initialize session state for geometries if not already done
@@ -132,8 +132,7 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
         srid = metadata.pop('srid')
         table_name = metadata.pop('table_name')
         drawing_info_str = metadata.pop('drawing_info', '{}')
-        drawing_info_1 = json.dumps(drawing_info_str)
-        drawing_info = json.loads(drawing_info_1)
+        drawing_info = json.loads(drawing_info_str)
         geometry = json.loads(geojson)
 
         # Define the source and destination coordinate systems
@@ -184,8 +183,8 @@ def add_geometries_to_map(geojson_list, metadata_list, map_object):
 def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
 
-    
     w = WebMap()
+
     # Ensure the DataFrame is spatially enabled
     def format_geometry(geom, srid):
         if isinstance(geom, str):
@@ -201,42 +200,33 @@ def create_arcgis_webmap(df):
         else:
             return geom
 
-
     # Apply format_geometry to the 'geometry' column
-    df['geometry'] = df.apply(lambda row: format_geometry(row['SHAPE'], row['srid']) if pd.notna(row['SHAPE']) else None, axis=1)
+    df['geometry'] = df.apply(lambda row: format_geometry(row['SHAPE'], row['srid']) if pd.notna(row['SHAPE']) and pd.notna(row['srid']) else None, axis=1)
+    
+    # Check for and handle NaN values in 'geometry' column
+    df = df.dropna(subset=['geometry'])
+
     @st.cache_data
     def convert_df(df):
-       return df.to_csv(index=False).encode('utf-8')
-    
-    
+        return df.to_csv(index=False).encode('utf-8')
+
     csv = convert_df(df)
-    
     st.download_button(
-       "Press to Download",
-       csv,
-       "file.csv",
-       "text/csv",
-       key='download-csv'
+        "Press to Download",
+        csv,
+        "file.csv",
+        "text/csv",
+        key='download-csv'
     )
+    
     df = pd.read_csv(csv)
     sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
     w.add_layer(df)
-    w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'}) 
+    w.save({'title': 'test_map2', 'snippet': 'test map', 'tags': 'test'})
+    
     # Debugging: Check DataFrame before conversion
     st.write(df.head())
 
-    # Convert to spatially enabled DataFrame
-    #sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
-   # st.write(df['geometry'])
-    # Debugging: Check spatially enabled DataFrame
-   # st.write(df.spatial.validate())
-    #w.add_layer(df)
-   # w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'})    
-    #feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
-
-    #webmap_item.add_layer(sdf)
-    #webmap_item.save()
-    #webmap_url = f"https://www.arcgis.com/home/webmap/viewer.html?webmap={webmap_item.id}"
     st.success(f"Webmap created successfully!")
 
 st.title('Streamlit Map Application')
@@ -263,15 +253,12 @@ st_data = st_folium(st.session_state.map, width=700, height=500, key="initial_ma
 
 if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing']:
     st.session_state.polygon_geojson = json.dumps(st_data['last_active_drawing']['geometry'])
-    #st.write(polygon_geojson)
     if st.button('Query Database'):
         try:
             st.session_state.df = query_geometries_within_polygon(st.session_state.polygon_geojson)
-            #st.write(df)
-            #create_arcgis_webmap(df)
-            if not df.empty:
-                st.session_state.geojson_list = df['geometry'].tolist()
-                st.session_state.metadata_list = df.to_dict(orient='records')
+            if not st.session_state.df.empty:
+                st.session_state.geojson_list = st.session_state.df['geometry'].tolist()
+                st.session_state.metadata_list = st.session_state.df.to_dict(orient='records')
                 
                 # Clear the existing map and reinitialize it
                 m = initialize_map()
@@ -285,26 +272,10 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 # Display the map using Streamlit-Folium
 st_folium(st.session_state.map, width=700, height=500, key="map")
 
-
-#st.write(st.session_state.polygon_geojson)
-#st.write(st.session_state.df)
 if st.button('Create ArcGIS Webmap'):
     create_arcgis_webmap(st.session_state.df)
     if st.session_state.geojson_list and st.session_state.metadata_list:
-        # Create a DataFrame from the geojson_list and metadata_list
-        #features = []
-        #for geojson, metadata in zip(st.session_state.geojson_list, st.session_state.metadata_list):
-          #  geometry = json.loads(geojson)
-          #  attributes = {key: value for key, value in metadata.items() if key != 'geometry'}
-           # features.append({**attributes, 'geometry': json.dumps(geometry), 'srid': metadata['srid']})
-
-       # df = pd.DataFrame(features)
-        
-        # Debugging: Check DataFrame columns and head
         st.write(st.session_state.df.columns)
         st.write(st.session_state.df.head())
-        
-        #create_arcgis_webmap(st.session_state.df)
     else:
         st.error("No geometries available to create a webmap.")
-
