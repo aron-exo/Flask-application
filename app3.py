@@ -285,8 +285,8 @@ if st_data and 'last_active_drawing' in st_data and st_data['last_active_drawing
 st_folium(st.session_state.map, width=700, height=500, key="map")
 
 
-st.write(st.session_state.polygon_geojson)
-st.write(st.session_state.df)
+#st.write(st.session_state.polygon_geojson)
+#st.write(st.session_state.df)
 if st.button('Create ArcGIS Webmap'):
     create_arcgis_webmap(st.session_state.df)
     if st.session_state.geojson_list and st.session_state.metadata_list:
