@@ -210,7 +210,7 @@ def create_arcgis_webmap(df):
     
     
     csv = convert_df(df)
-    
+    df = pd.read_csv(csv)
     st.download_button(
        "Press to Download",
        csv,
