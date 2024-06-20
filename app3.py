@@ -206,6 +206,9 @@ def create_arcgis_webmap(df):
     df['geometry'] = df.apply(lambda row: format_geometry(row['SHAPE'], row['srid']) if pd.notna(row['SHAPE']) else None, axis=1)
     @st.cache_data
     def convert_df(df):
+       sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
+       w.add_layer(df)
+       w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'}) 
        return df.to_csv(index=False).encode('utf-8')
     
     
@@ -222,12 +225,12 @@ def create_arcgis_webmap(df):
     st.write(df.head())
 
     # Convert to spatially enabled DataFrame
-    sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
-    st.write(df['geometry'])
+    #sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
+   # st.write(df['geometry'])
     # Debugging: Check spatially enabled DataFrame
-    st.write(df.spatial.validate())
-    w.add_layer(df)
-    w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'})    
+   # st.write(df.spatial.validate())
+    #w.add_layer(df)
+   # w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'})    
     #feature_layer_item = sdf.spatial.to_featurelayer(title="Intersected Features", gis=gis)
 
     #webmap_item.add_layer(sdf)
