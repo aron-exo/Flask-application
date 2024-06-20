@@ -209,7 +209,7 @@ def create_arcgis_webmap(df):
     @st.cache_data
     def convert_df(df):
         st.write(df.head())
-        df2 = df.iloc[-5:-2]
+        df2 = df.iloc[0:5]
         sdf = pd.DataFrame.spatial.from_df(df2, geometry_column='geometry')
         
         st.write(sdf.head())
