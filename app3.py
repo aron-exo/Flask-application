@@ -210,7 +210,7 @@ def create_arcgis_webmap(df):
     
     
     csv = convert_df(df)
-    df = pd.read_csv(csv)
+    
     st.download_button(
        "Press to Download",
        csv,
@@ -218,7 +218,7 @@ def create_arcgis_webmap(df):
        "text/csv",
        key='download-csv'
     )
-
+    df = pd.read_csv(csv)
     sdf = pd.DataFrame.spatial.from_df(df, geometry_column='geometry')
     w.add_layer(df)
     w.save({'title':'test_map2', 'snippet':'test map', 'tags':'test'}) 
