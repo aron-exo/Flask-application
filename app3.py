@@ -184,7 +184,7 @@ def create_arcgis_webmap(df):
     gis = GIS("https://www.arcgis.com", st.secrets["arcgis_username"], st.secrets["arcgis_password"])
 
     w = WebMap()
-
+    st.write(df.head())
     # Ensure the DataFrame is spatially enabled
     def format_geometry(geom, srid):
         if isinstance(geom, str):
